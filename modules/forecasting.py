@@ -10,6 +10,8 @@ from prophet import Prophet
 import plotly.graph_objects as go
 from modules.config import Config
 
+# --- Funciones de Series de Tiempo y Pronóstico ---
+
 @st.cache_data(show_spinner=False)
 def get_decomposition_results(series, period=12, model='additive'):
     """Realiza la descomposición de la serie de tiempo."""
@@ -24,6 +26,7 @@ def create_acf_chart(series, max_lag):
     if len(series) <= max_lag:
         return go.Figure().update_layout(title="Datos insuficientes para ACF")
     
+    # Se utiliza la función acf de statsmodels
     acf_values = acf(series, nlags=max_lag)
     lags = list(range(max_lag + 1))
     conf_interval = 1.96 / np.sqrt(len(series))
@@ -45,6 +48,7 @@ def create_pacf_chart(series, max_lag):
     if len(series) <= max_lag:
         return go.Figure().update_layout(title="Datos insuficientes para PACF")
 
+    # Se utiliza la función pacf de statsmodels
     pacf_values = pacf(series, nlags=max_lag)
     lags = list(range(max_lag + 1))
     conf_interval = 1.96 / np.sqrt(len(series))
@@ -64,7 +68,6 @@ def create_pacf_chart(series, max_lag):
 def generate_sarima_forecast(ts_data_raw, order, seasonal_order, horizon):
     """
     Entrena un modelo SARIMA y genera un pronóstico.
-    ts_data_raw: DataFrame con columnas DATE_COL y PRECIPITATION_COL
     """
     ts_data = ts_data_raw[[Config.DATE_COL, Config.PRECIPITATION_COL]].copy()
     ts_data = ts_data.set_index(Config.DATE_COL).sort_index()
@@ -87,7 +90,7 @@ def generate_sarima_forecast(ts_data_raw, order, seasonal_order, horizon):
     forecast_mean = forecast.predicted_mean
     forecast_ci = forecast.conf_int()
     
-    # Prepara el resultado para almacenarlo en session_state (similar al original)
+    # Prepara el resultado para almacenarlo en session_state
     sarima_df_export = forecast_mean.reset_index().rename(
         columns={'index': 'ds', 'predicted_mean': 'yhat'}
     )
@@ -96,7 +99,6 @@ def generate_sarima_forecast(ts_data_raw, order, seasonal_order, horizon):
 def generate_prophet_forecast(ts_data_raw, horizon):
     """
     Entrena un modelo Prophet y genera un pronóstico.
-    ts_data_raw: DataFrame con columnas DATE_COL y PRECIPITATION_COL
     """
     ts_data_prophet = ts_data_raw[[Config.DATE_COL, Config.PRECIPITATION_COL]].copy()
     ts_data_prophet.rename(columns={Config.DATE_COL: 'ds', Config.PRECIPITATION_COL: 'y'}, 
@@ -108,7 +110,10 @@ def generate_prophet_forecast(ts_data_raw, horizon):
     # Prophet requiere que los datos sean continuos, por lo que rellenamos nulos si existen
     ts_data_prophet['y'] = ts_data_prophet['y'].interpolate()
     
-    model_prophet = Prophet(monthly_seasonality=True, weekly_seasonality=False)
+    # CORRECCIÓN: Se elimina 'monthly_seasonality' y se usa el argumento estándar 'yearly_seasonality'
+    # para modelar el ciclo anual de 12 meses.
+    model_prophet = Prophet(yearly_seasonality=True, weekly_seasonality=False) 
+    
     model_prophet.fit(ts_data_prophet)
     
     future = model_prophet.make_future_dataframe(periods=horizon, freq='MS')
