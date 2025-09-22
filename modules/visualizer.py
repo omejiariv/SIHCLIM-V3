@@ -1930,12 +1930,23 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
 
     with compare_forecast_tab:
         st.subheader("Comparación de Pronósticos: SARIMA vs Prophet")
-        if 'sarima_forecast' not in st.session_state or 'prophet_forecast' not in st.session_state:
+        
+        # VERIFICACIÓN ROBUSTA: Chequea si las claves existen Y si los valores NO son None
+        sarima_disponible = st.session_state.get('sarima_forecast') is not None
+        prophet_disponible = st.session_state.get('prophet_forecast') is not None
+        
+        if not sarima_disponible or not prophet_disponible:
             st.warning("Debe generar un pronóstico SARIMA y un pronóstico Prophet en las pestañas anteriores antes de poder compararlos.")
         else:
+            # Los valores están garantizados de ser DataFrames o similares (no None), por lo que .copy() es seguro.
             sarima_df = st.session_state['sarima_forecast'].copy()
             prophet_df = st.session_state['prophet_forecast'].copy()
             
+            # Asegurar que los DataFrames tengan datos (si la generación falló de otra manera)
+            if sarima_df.empty or prophet_df.empty:
+                st.warning("Los pronósticos generados no contienen datos válidos para la comparación.")
+                return
+
             station_id_for_history = st.selectbox("Estación para serie histórica (debe coincidir con la de "
                                                   "los pronósticos):",
                                                   options=stations_for_analysis, key="compare_station_history")
