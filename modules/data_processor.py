@@ -9,7 +9,7 @@ import os
 import io
 import numpy as np
 from modules.config import Config
-from modules.utils import standardize_numeric_column # <--- CAMBIO: Importación de la nueva función
+from modules.utils import standardize_numeric_column
 
 # NOTA: Se eliminan las importaciones de scipy.stats (gamma, norm) ya que se movieron a analysis.py
 from scipy.interpolate import Rbf
@@ -54,8 +54,11 @@ def load_csv_data(file_uploader_object, sep=';', lower_case=True):
             # NOTA: El separador ';' debe manejarse después de la lectura
             df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=encoding)
             
-            # Limpieza de columnas (espacios en blanco, caracteres especiales)
-            df.columns = df.columns.str.strip().str.replace(';', '')
+            # CORRECCIÓN DE SINTAXIS: Limpieza robusta de columnas
+            # 1. Limpia espacios en blanco. 
+            # 2. Reemplaza el separador extra (;) que pudo haber quedado en el nombre de columna.
+            df.columns = df.columns.str.strip().str.replace(';', '', regex=False)
+            
             if lower_case:
                 df.columns = df.columns.str.lower()
             return df
@@ -153,22 +156,22 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
         st.error("No se encontraron columnas de longitud y/o latitud en el archivo de estaciones.")
         return None, None, None, None
 
-    # CORRECCIÓN: CONVERSIÓN NUMÉRICA ESTANDARIZADA con standardize_numeric_column
-    df_stations_raw[lon_col] = standardize_numeric_column(df_stations_raw[lon_col]) # <--- CAMBIO
-    df_stations_raw[lat_col] = standardize_numeric_column(df_stations_raw[lat_col]) # <--- CAMBIO
+    # CONVERSIÓN NUMÉRICA ESTANDARIZADA con standardize_numeric_column
+    df_stations_raw[lon_col] = standardize_numeric_column(df_stations_raw[lon_col]) 
+    df_stations_raw[lat_col] = standardize_numeric_column(df_stations_raw[lat_col]) 
     
     df_stations_raw.dropna(subset=[lon_col, lat_col], inplace=True)
     
     gdf_stations = gpd.GeoDataFrame(df_stations_raw,
-                                    geometry=gpd.points_from_xy(df_stations_raw[lon_col], df_stations_raw[lat_col]),
-                                    crs="EPSG:9377").to_crs("EPSG:4326")
+                                     geometry=gpd.points_from_xy(df_stations_raw[lon_col], df_stations_raw[lat_col]),
+                                     crs="EPSG:9377").to_crs("EPSG:4326")
     
     gdf_stations[Config.LONGITUDE_COL] = gdf_stations.geometry.x
     gdf_stations[Config.LATITUDE_COL] = gdf_stations.geometry.y
     
     if Config.ALTITUDE_COL in gdf_stations.columns:
-        # CORRECCIÓN: CONVERSIÓN NUMÉRICA ESTANDARIZADA para altitud
-        gdf_stations[Config.ALTITUDE_COL] = standardize_numeric_column(gdf_stations[Config.ALTITUDE_COL]) # <--- CAMBIO
+        # CONVERSIÓN NUMÉRICA ESTANDARIZADA para altitud
+        gdf_stations[Config.ALTITUDE_COL] = standardize_numeric_column(gdf_stations[Config.ALTITUDE_COL])
 
     #--- 2. Procesar Precipitación (df_long)
     # Asume que los IDs de estación son las columnas con solo dígitos
@@ -181,16 +184,16 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
     id_vars = [col for col in df_precip_raw.columns if not col.isdigit()]
     
     df_long = df_precip_raw.melt(id_vars=id_vars, value_vars=station_id_cols,
-                                var_name='id_estacion', value_name=Config.PRECIPITATION_COL)
-                                
+                                 var_name='id_estacion', value_name=Config.PRECIPITATION_COL)
+                                 
     # Conversión numérica estandarizada para índices y precipitación
     cols_to_numeric = [Config.ENSO_ONI_COL, 'temp_sst', 'temp_media',
                        Config.PRECIPITATION_COL, Config.SOI_COL, Config.IOD_COL]
     
     for col in cols_to_numeric:
         if col in df_long.columns:
-            # CORRECCIÓN: CONVERSIÓN NUMÉRICA ESTANDARIZADA
-            df_long[col] = standardize_numeric_column(df_long[col]) # <--- CAMBIO
+            # CONVERSIÓN NUMÉRICA ESTANDARIZADA
+            df_long[col] = standardize_numeric_column(df_long[col])
 
     df_long.dropna(subset=[Config.PRECIPITATION_COL], inplace=True)
     
@@ -244,23 +247,14 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
         
     for col in [Config.ENSO_ONI_COL, 'temp_sst', 'temp_media']:
         if col in df_enso.columns:
-            # CORRECCIÓN: CONVERSIÓN NUMÉRICA ESTANDARIZADA para ENSO
-            df_enso[col] = standardize_numeric_column(df_enso[col]) # <--- CAMBIO
+            # CONVERSIÓN NUMÉRICA ESTANDARIZADA para ENSO
+            df_enso[col] = standardize_numeric_column(df_enso[col])
 
     return gdf_stations, gdf_municipios, df_long, df_enso
 
-# NOTA: Las funciones de interpolación (IDW, RBF) y SPI se mantendrán temporalmente
-# en este archivo o se moverán en el siguiente paso de refactorización (Visualizer/Interpolation).
-# Por ahora, mantendremos solo las de interpolación aquí y las de SPI las eliminamos.
-
-# ELIMINADO: calculate_spi ya no está aquí.
-# ELIMINADO: Las funciones de interpolación IDW y RBF se dejarán en este módulo por ahora,
-# pero se moverán a un nuevo módulo (por ejemplo, interpolation.py) en el siguiente paso
-# si queremos separar completamente el I/O del procesamiento especializado.
 
 def interpolate_idw(lons, lats, vals, grid_lon, grid_lat, power=2):
     """Realiza una interpolación por Distancia Inversa Ponderada (IDW)."""
-    # Código completo de interpolate_idw
     nx, ny = len(grid_lon), len(grid_lat)
     grid_z = np.zeros((ny, nx))
     for i in range(nx):
@@ -282,7 +276,6 @@ def interpolate_idw(lons, lats, vals, grid_lon, grid_lat, power=2):
 
 def interpolate_rbf_spline(lons, lats, vals, grid_lon, grid_lat, function='thin_plate'):
     """Realiza una interpolación usando Radial Basis Function (Spline)."""
-    # Código completo de interpolate_rbf_spline
     grid_x, grid_y = np.meshgrid(grid_lon, grid_lat)
     # FIX: La función 'thin_plate' es aceptada por la librería. Aseguramos su nombre.
     rbf = Rbf(lons, lats, vals, function=function)
