@@ -25,11 +25,12 @@ from prophet.plot import plot_plotly # Se mantiene solo para la función de plot
 from modules.config import Config
 from modules.utils import add_folium_download_button, standardize_numeric_column
 from modules.data_processor import interpolate_idw, interpolate_rbf_spline
-from modules.analysis import calculate_spi, calculate_monthly_anomalies 
+from modules.analysis import calculate_spi, calculate_monthly_anomalies, calculate_percentiles_and_extremes 
 from modules.forecasting import (
     generate_sarima_forecast, generate_prophet_forecast, 
     get_decomposition_results, create_acf_chart, create_pacf_chart
 )
+
 
 # Inicializamos una variable de estado para controlar el reinicio del GIF
 if 'gif_reload_key' not in st.session_state:
@@ -1141,8 +1142,9 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     elif method == "Spline (Thin Plate)":
                         # Usamos la función Rbf de scipy
                         rbf = Rbf(lons, lats, vals.values, function='thin_plate')
-                        z_grid = rbf(grid_lon, grid_lat)
-                        z_grid = z_grid.T # Transponer para Plotly
+                        # Se necesita transponer z_grid. El código original lo hace justo después de la Rbf.
+                        z_grid_raw = rbf(grid_lon, grid_lat)
+                        z_grid = z_grid_raw.T 
                 except Exception as e:
                     st.error(f"Error al calcular {method} para el año {year}: {e}")
                     return go.Figure().update_layout(title=f"Error en {method} para {year}")
@@ -1152,7 +1154,11 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     df_plot_scatter = data_year_with_geom.drop(columns=['geometry']).copy()
                     
                     # Corregimos la paleta de colores a un estándar de Plotly.
-                    fig = go.Figure(data=go.Contour(z=z_grid.T, x=grid_lon, y=grid_lat,
+                    # Se usa z_grid.T en go.Contour si RBF ya fue transpuesta,
+                    # para Kriging/IDW debe ser transpuesta para el Contour.
+                    # Asumimos que los métodos de Kriging/IDW devuelven el resultado en la orientación
+                    # que espera go.Contour después de la transposición en interpolate_idw
+                    fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
                                                     colorscale=px.colors.sequential.YIGnBu,
                                                     contours=dict(showlabels=True,
                                                                   labelfont=dict(size=10, color='white'))))
@@ -1194,9 +1200,10 @@ def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
 
     with percentile_sub_tab:
         station_to_analyze_perc = st.selectbox("Seleccione una estación para el análisis de percentiles:",
-                                               options=sorted(stations_for_analysis),
+                                               options=sorted(st.session_state.get('filtered_station_options', [])),
                                                key="percentile_station_select")
         if station_to_analyze_perc:
+            # LLAMA A LA FUNCIÓN DE VISUALIZACIÓN DE PERCENTILES
             display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc)
 
     with spi_sub_tab:
@@ -2273,16 +2280,15 @@ def display_downloads_tab(df_anual_melted, df_monthly_filtered, stations_for_ana
     if st.session_state.analysis_mode == "Completar series (interpolación)":
         st.markdown("**Datos de Precipitación Mensual (Series Completadas y Filtradas)**")
         
-        # Filtro detallado de la serie completa (df_monthly_processed)
-        df_completed_to_download = st.session_state.df_monthly_processed[
+        # Corrección del SyntaxError: se asegura que la expresión de filtrado esté correctamente cerrada
+        df_completed_to_download = (st.session_state.df_monthly_processed[
             (st.session_state.df_monthly_processed[Config.STATION_NAME_COL].isin(stations_for_analysis)) &
             (st.session_state.df_monthly_processed[Config.DATE_COL].dt.year >=
              st.session_state.year_range[0]) &
             (st.session_state.df_monthly_processed[Config.DATE_COL].dt.year <=
              st.session_state.year_range[1]) &
-            (st.session_state.df_monthly_processed[Config.DATE_COL].dt.month.isin(st.session_state.meses_
-                                                                                 numeros))
-        ].copy()
+            (st.session_state.df_monthly_processed[Config.DATE_COL].dt.month.isin(st.session_state.meses_numeros))
+        ]).copy() 
 
         csv_completado = convert_df_to_csv(df_completed_to_download)
         st.download_button("Descargar CSV con Series Completadas", csv_completado,
@@ -2324,6 +2330,85 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
 # Marcador de Posición para Funciones No Definidas
 def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc):
-    st.warning(f"La funcionalidad de análisis por percentiles para la estación "
-               f"'{station_to_analyze_perc}' aún no ha sido implementada (Fase 2).")
-    pass
+    """
+    Realiza y muestra el análisis de sequías y eventos extremos por percentiles
+    mensuales para una estación.
+    """
+    # Necesitamos el DataFrame completo (df_long) para calcular los percentiles
+    # sobre todo el periodo histórico (climatología), no solo el periodo filtrado.
+    df_long = st.session_state.get('df_long')
+    
+    if df_long is None or df_long.empty:
+        st.warning("No se puede realizar el análisis de percentiles. El DataFrame histórico no está disponible.")
+        return
+
+    st.markdown("#### Parámetros del Análisis")
+    col1, col2 = st.columns(2)
+    p_lower = col1.slider("Percentil Inferior (Sequía):", 1, 40, 10, key="p_lower")
+    p_upper = col2.slider("Percentil Superior (Húmedo):", 60, 99, 90, key="p_upper")
+    
+    st.markdown("---")
+
+    with st.spinner(f"Calculando percentiles {p_lower} y {p_upper} para {station_to_analyze_perc}...")
+        try:
+            # LLAMADA AL MÓDULO ANALYSIS
+            df_extremes, df_thresholds = calculate_percentiles_and_extremes(
+                df_long, station_to_analyze_perc, p_lower, p_upper
+            )
+            
+            # Aplicar el filtro de rango de años y meses de la sesión actual a los resultados
+            df_plot = df_extremes[
+                (df_extremes[Config.DATE_COL].dt.year >= st.session_state.year_range[0]) &
+                (df_extremes[Config.DATE_COL].dt.year <= st.session_state.year_range[1]) &
+                (df_extremes[Config.DATE_COL].dt.month.isin(st.session_state.meses_numeros))
+            ].copy()
+            
+            if df_plot.empty:
+                st.warning("No hay datos que coincidan con los filtros de tiempo para la estación seleccionada.")
+                return
+
+            # --- Gráfico 1: Serie de Tiempo con Eventos Marcados
+            st.subheader(f"Serie de Tiempo con Eventos Extremos ({p_lower} y {p_upper} Percentiles)")
+            
+            color_map = {'Sequía Extrema (< P{}%)'.format(p_lower): 'red', 
+                         'Húmedo Extremo (> P{}%)'.format(p_upper): 'blue', 
+                         'Normal': 'gray'}
+
+            fig_series = px.scatter(df_plot, x=Config.DATE_COL, y=Config.PRECIPITATION_COL,
+                                     color='event_type',
+                                     color_discrete_map=color_map,
+                                     title=f"Precipitación Mensual y Eventos Extremos en {station_to_analyze_perc}",
+                                     labels={Config.PRECIPITATION_COL: "Precipitación (mm)", 
+                                             Config.DATE_COL: "Fecha"},
+                                     hover_data={'event_type': True, 'p_lower': ':.0f', 'p_upper': ':.0f'})
+            
+            # Añadir las líneas de umbral (pueden ser promedio mensual si se desea)
+            # Simplificaremos el umbral como una línea horizontal de la media histórica general
+            mean_precip = df_long[Config.PRECIPITATION_COL].mean()
+            fig_series.add_hline(y=mean_precip, line_dash="dash", line_color="green", annotation_text="Media Histórica")
+
+            fig_series.update_layout(height=500)
+            st.plotly_chart(fig_series, use_container_width=True)
+
+            # --- Gráfico 2: Umbrales Mensuales (Climatología)
+            st.subheader("Umbrales de Percentil Mensual (Climatología Histórica)")
+            
+            meses_map_inv = {1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun', 
+                             7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'}
+            df_thresholds['Month_Name'] = df_thresholds[Config.MONTH_COL].map(meses_map_inv)
+
+            fig_thresh = go.Figure()
+            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['p_upper'], 
+                                            mode='lines+markers', name=f'Percentil Superior (P{p_upper}%)', line=dict(color='blue')))
+            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['p_lower'], 
+                                            mode='lines+markers', name=f'Percentil Inferior (P{p_lower}%)', line=dict(color='red')))
+            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['mean_monthly'], 
+                                            mode='lines', name='Media Mensual', line=dict(color='green', dash='dot')))
+
+            fig_thresh.update_layout(title='Umbrales de Precipitación por Mes (Basado en Climatología)',
+                                     xaxis_title="Mes", yaxis_title="Precipitación (mm)", height=400)
+            st.plotly_chart(fig_thresh, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Error al calcular el análisis de percentiles: {e}")
+            st.info("Asegúrese de que el archivo histórico de datos (`df_long`) contenga datos suficientes para la estación seleccionada.")
