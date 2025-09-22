@@ -1,9 +1,11 @@
-# modules/utils.py
+# modules/utils.py (Código completo y corregido)
 
 import streamlit as st
 import io
 import plotly.graph_objects as go 
-import folium # Importar folium para add_folium_download_button
+import folium 
+import pandas as pd # <--- ¡IMPORTACIÓN FALTANTE!
+import numpy as np # Necesario para algunas utilidades futuras
 
 # --- NUEVA FUNCIÓN PARA CORRECCIÓN NUMÉRICA ---
 @st.cache_data
@@ -21,7 +23,6 @@ def standardize_numeric_column(series):
 
 def display_plotly_download_buttons(fig, file_prefix):
     """Muestra botones de descarga para un gráfico Plotly (HTML y PNG).""" 
-    # ^^^ CORRECCIÓN AQUÍ: Se asegura que el docstring tenga 3 comillas dobles.
     st.markdown("---")
     col1, col2 = st.columns(2)
     
