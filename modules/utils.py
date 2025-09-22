@@ -2,10 +2,8 @@
 
 import streamlit as st
 import io
-import plotly.graph_objects as go
-import numpy as np # Necesario para standardize_numeric_column y otros utils
-import pandas as pd
-import folium
+import plotly.graph_objects as go 
+import folium # Importar folium para add_folium_download_button
 
 # --- NUEVA FUNCIÓN PARA CORRECCIÓN NUMÉRICA ---
 @st.cache_data
@@ -15,21 +13,18 @@ def standardize_numeric_column(series):
     reemplazando comas por puntos como separador decimal.
     """
     # 1. Asegurar string y reemplazar comas por puntos (problema común de CSV latinos)
-    # Se añade la verificación de 'dtype' para evitar el costoso astype(str) en columnas ya numéricas
-    if not pd.api.types.is_numeric_dtype(series):
-        series_clean = series.astype(str).str.replace(',', '.', regex=False)
-    else:
-        series_clean = series
+    series_clean = series.astype(str).str.replace(',', '.', regex=False)
     
     # 2. Convertir a numérico, forzando errores a NaN
     return pd.to_numeric(series_clean, errors='coerce')
 
 
-# --- FUNCIONES DE DESCARGA EXISTENTES ---
-def display_plotly_download_buttons (fig, file_prefix):
-    """Muestra botones de descarga para un gráfico Plotly (HTML y PNG)." """"
+def display_plotly_download_buttons(fig, file_prefix):
+    """Muestra botones de descarga para un gráfico Plotly (HTML y PNG).""" 
+    # ^^^ CORRECCIÓN AQUÍ: Se asegura que el docstring tenga 3 comillas dobles.
     st.markdown("---")
     col1, col2 = st.columns(2)
+    
     with col1:
         html_buffer = io.StringIO()
         fig.write_html(html_buffer, include_plotlyjs='cdn')
@@ -41,9 +36,11 @@ def display_plotly_download_buttons (fig, file_prefix):
             key=f"dl_html_{file_prefix}",
             use_container_width=True
         )
+
     with col2:
         try:
-            img_bytes = fig.to_image(format="png", width = 1200, height = 700, scale=2)
+            # Asegúrate de tener kaleido instalado: pip install kaleido
+            img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
             st.download_button(
                 label="Descargar Gráfico (PNG)",
                 data=img_bytes,
