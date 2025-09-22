@@ -733,25 +733,36 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
     with gif_tab:
         st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
+        
+        # 1. Verificar si la ruta del GIF existe
         if os.path.exists(Config.GIF_PATH):
             col_controls, col_gif = st.columns([1, 3])
+            
             with col_controls:
                 # Botón de reinicio que incrementa la clave para forzar la recarga
                 if st.button("🔄 Reiniciar Animación"):
+                    # Simplemente incrementamos la clave, y Streamlit recargará el contenido
                     st.session_state['gif_reload_key'] += 1
                     st.rerun()
+                
+                # Usamos una métrica invisible para forzar la actualización del widget st.image
+                # (aunque st.rerun() ya lo hace, es una técnica de Streamlit para asegurar caché)
+                st.metric(label="Clave de Recarga", value=st.session_state['gif_reload_key'], delta=None)
+
             with col_gif:
-                with open(Config.GIF_PATH, "rb") as file:
-                    contents = file.read()
-                    data_url = base64.b64encode(contents).decode("utf-8")
-                    # Reducción del tamaño del GIF al 70% 
-                    st.markdown(
-                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
-                        f'style="width:70%;" key={st.session_state["gif_reload_key"]}>',
-                        unsafe_allow_html=True
-                    )
+                # 2. Usar st.image con la clave de recarga
+                # Al pasar la ruta directamente, Streamlit lo maneja mejor que el embedding Base64
+                st.image(
+                    Config.GIF_PATH,
+                    caption='Animación PPAM',
+                    width=None,
+                    use_column_width=False,
+                    # La clave es crucial para forzar el re-renderizado
+                    key=f"ppam_gif_{st.session_state['gif_reload_key']}" 
+                )
+
         else:
-            st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}")
+            st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
 
     with mapa_interactivo_tab:
         st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
