@@ -965,7 +965,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 # ELIMINAR COLUMNA GEOMETRY ANTES DE PLOTLY (para evitar TypeError)
                 df_anim_plot = df_anim_complete.drop(columns=['geometry']).copy()
                 
-                # Usando YIGnBu (estándar de Plotly)
+                # Usando YlGnBu (estándar de Plotly)
                 fig_mapa_animado = px.scatter_geo(df_anim_plot,
                                                   lat=df_anim_plot[Config.LATITUDE_COL],
                                                   lon=df_anim_plot[Config.LONGITUDE_COL],
@@ -976,7 +976,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                                   animation_frame=Config.YEAR_COL,
                                                   projection='natural earth',
                                                   title=f'Precipitación Anual por Estación ({st.session_state.year_range[0]} - {st.session_state.year_range[1]})',
-                                                  color_continuous_scale=px.colors.sequential.YIGnBu,
+                                                  color_continuous_scale=px.colors.sequential.YlGnBu,
                                                   range_color=[min_precip_anim, max_precip_anim])
 
                 fig_mapa_animado.update_traces(hovertemplate='%{customdata[0]}')
@@ -1157,7 +1157,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     # Asumimos que los métodos de Kriging/IDW devuelven el resultado en la orientación
                     # que espera go.Contour después de la transposición en interpolate_idw/rbf
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
-                                                    colorscale=px.colors.sequential.YIGnBu,
+                                                    colorscale=px.colors.sequential.YlGnBu,
                                                     contours=dict(showlabels=True,
                                                                   labelfont=dict(size=10, color='white'))))
                     
