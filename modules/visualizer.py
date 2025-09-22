@@ -14,7 +14,7 @@ import numpy as np
 import os
 import base64
 import branca.colormap as cm
-import matplotlib.cm as mpl_cm
+import matplotlib.cm as mpl_cm 
 from pykrige.ok import OrdinaryKriging
 from scipy import stats
 from scipy.interpolate import Rbf 
@@ -2323,8 +2323,14 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
         # Si no hay datos anuales, añade la columna con un valor indicativo
         df_info_table['Precipitación media anual (mm)'] = 'N/A'
 
-    st.dataframe(df_info_table.drop(columns=[Config.PERCENTAGE_COL]).set_index(Config.STATION_
-                                                                              NAME_COL), use_container_width=True)
+    # CORRECCIÓN DE SINTAXIS (Versión robusta con asignación a variable temporal)
+    df_for_display = (
+        df_info_table
+        .drop(columns=[Config.PERCENTAGE_COL])
+        .set_index(Config.STATION_NAME_COL)
+    )
+
+    st.dataframe(df_for_display, use_container_width=True)
 
 # Marcador de Posición para Funciones No Definidas
 def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc):
