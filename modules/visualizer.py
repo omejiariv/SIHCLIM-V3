@@ -723,7 +723,9 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
         st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
         return
     
-    st.info(f"Mostrando análisis para {len(stations_for_analysis)} estaciones en el período "
+    selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
+        else f"1 estación: {stations_for_analysis[0]}"
+    st.info(f"Mostrando análisis para {selected_stations_str} en el período "
             f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
     
     tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
@@ -734,30 +736,24 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
     with gif_tab:
         st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
         
-        # 1. Verificar si la ruta del GIF existe
         if os.path.exists(Config.GIF_PATH):
             col_controls, col_gif = st.columns([1, 3])
             
             with col_controls:
                 # Botón de reinicio que incrementa la clave para forzar la recarga
                 if st.button("🔄 Reiniciar Animación"):
-                    # Simplemente incrementamos la clave, y Streamlit recargará el contenido
                     st.session_state['gif_reload_key'] += 1
                     st.rerun()
                 
-                # Usamos una métrica invisible para forzar la actualización del widget st.image
-                # (aunque st.rerun() ya lo hace, es una técnica de Streamlit para asegurar caché)
-                st.metric(label="Clave de Recarga", value=st.session_state['gif_reload_key'], delta=None)
+                # Usamos una métrica para asegurar que el estado de sesión se actualice
+                # st.metric(label="Clave de Recarga (Debug)", value=st.session_state['gif_reload_key'], delta=None)
 
             with col_gif:
-                # 2. Usar st.image con la clave de recarga
-                # Al pasar la ruta directamente, Streamlit lo maneja mejor que el embedding Base64
+                # CORRECCIÓN DE TYPEERROR: Usamos key=f"..." y se simplifica la inyección
                 st.image(
                     Config.GIF_PATH,
                     caption='Animación PPAM',
-                    width=None,
-                    use_column_width=False,
-                    # La clave es crucial para forzar el re-renderizado
+                    width=None, # Permite que Streamlit decida el ancho
                     key=f"ppam_gif_{st.session_state['gif_reload_key']}" 
                 )
 
@@ -938,7 +934,10 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
     with anim_tab:
         st.subheader("Mapa Animado de Precipitación Anual")
-        st.info("Este mapa utiliza Plotly. Los controles de mapa se encuentran en las otras pestañas de mapas.")
+        selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
+            else f"1 estación: {stations_for_analysis[0]}"
+        st.info(f"Mostrando análisis para {selected_stations_str} en el período "
+                f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
 
         if not df_anual_melted.empty:
             all_years = sorted(df_anual_melted[Config.YEAR_COL].unique())
@@ -976,7 +975,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 # ELIMINAR COLUMNA GEOMETRY ANTES DE PLOTLY (para evitar TypeError)
                 df_anim_plot = df_anim_complete.drop(columns=['geometry']).copy()
                 
-                # Usando YlGnBu (estándar de Plotly)
+                # Usando YlGnBu (paleta corregida de Plotly)
                 fig_mapa_animado = px.scatter_geo(df_anim_plot,
                                                   lat=df_anim_plot[Config.LATITUDE_COL],
                                                   lon=df_anim_plot[Config.LONGITUDE_COL],
@@ -1121,12 +1120,19 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 data_year_with_geom = pd.merge(
                     df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
                     # Aseguramos la columna de geometría para Folium/GeoPandas y las coordenadas numéricas
-                    gdf_filtered_map[[Config.STATION_NAME_COL, 'geometry', Config.LATITUDE_COL,
+                    gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
                                       Config.LONGITUDE_COL]].drop_duplicates(),
                     on=Config.STATION_NAME_COL
                 )
+                
+                # Para la unión posterior con GeoDataFrame, necesitamos la columna 'geometry'
+                # La volvemos a crear usando las coordenadas LAT/LON que se usaron para el merge,
+                # ya que data_year_with_geom perdió la columna 'geometry' en la selección inicial
+                data_year_with_geom_geo = gpd.GeoDataFrame(data_year_with_geom, 
+                                                            geometry=gpd.points_from_xy(data_year_with_geom[Config.LONGITUDE_COL], data_year_with_geom[Config.LATITUDE_COL]),
+                                                            crs="EPSG:4326")
 
-                if len(data_year_with_geom) < 4:
+                if len(data_year_with_geom_geo) < 4:
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
@@ -1153,7 +1159,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     elif method == "Spline (Thin Plate)":
                         # Usamos la función Rbf de scipy
                         rbf = Rbf(lons, lats, vals.values, function='thin_plate')
-                        # Se necesita transponer z_grid. El código original lo hace justo después de la Rbf.
                         z_grid_raw = rbf(grid_lon, grid_lat)
                         z_grid = z_grid_raw.T 
                 except Exception as e:
@@ -1161,22 +1166,17 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     return go.Figure().update_layout(title=f"Error en {method} para {year}")
 
                 if z_grid is not None:
-                    # Creamos una copia del DataFrame *sin* la columna geometry antes de Plotly
-                    df_plot_scatter = data_year_with_geom.drop(columns=['geometry']).copy()
-                    
                     # Corregimos la paleta de colores a un estándar de Plotly.
-                    # Asumimos que los métodos de Kriging/IDW devuelven el resultado en la orientación
-                    # que espera go.Contour después de la transposición en interpolate_idw/rbf
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
                                                     colorscale=px.colors.sequential.YlGnBu,
                                                     contours=dict(showlabels=True,
                                                                   labelfont=dict(size=10, color='white'))))
                     
                     # Usamos las columnas numéricas para Plotly Scatter (tooltips)
-                    fig.add_trace(go.Scatter(x=df_plot_scatter[Config.LONGITUDE_COL],
-                                             y=df_plot_scatter[Config.LATITUDE_COL],
+                    fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
+                                             y=data_year_with_geom[Config.LATITUDE_COL],
                                              mode='markers', marker=dict(color='red', size=5), name='Estaciones',
-                                             text=df_plot_scatter.apply(lambda row:
+                                             text=data_year_with_geom.apply(lambda row:
                                                                         f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
                                              hoverinfo='text'))
                     
@@ -1942,18 +1942,15 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
     with compare_forecast_tab:
         st.subheader("Comparación de Pronósticos: SARIMA vs Prophet")
         
-        # VERIFICACIÓN ROBUSTA: Chequea si las claves existen Y si los valores NO son None
         sarima_disponible = st.session_state.get('sarima_forecast') is not None
         prophet_disponible = st.session_state.get('prophet_forecast') is not None
         
         if not sarima_disponible or not prophet_disponible:
             st.warning("Debe generar un pronóstico SARIMA y un pronóstico Prophet en las pestañas anteriores antes de poder compararlos.")
         else:
-            # Los valores están garantizados de ser DataFrames o similares (no None), por lo que .copy() es seguro.
             sarima_df = st.session_state['sarima_forecast'].copy()
             prophet_df = st.session_state['prophet_forecast'].copy()
             
-            # Asegurar que los DataFrames tengan datos (si la generación falló de otra manera)
             if sarima_df.empty or prophet_df.empty:
                 st.warning("Los pronósticos generados no contienen datos válidos para la comparación.")
                 return
@@ -2346,6 +2343,7 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
         df_info_table['Precipitación media anual (mm)'] = 'N/A'
 
     # CORRECCIÓN DE SINTAXIS (Versión robusta con asignación a variable temporal)
+    # Resuelve el error de la línea 2326: set_index(Config.STATION_NAME_COL)
     df_for_display = (
         df_info_table
         .drop(columns=[Config.PERCENTAGE_COL])
