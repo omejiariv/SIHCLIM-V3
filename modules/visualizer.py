@@ -2292,7 +2292,36 @@ def display_downloads_tab(df_anual_melted, df_monthly_filtered, stations_for_ana
         st.download_button("Descargar CSV con Series Completadas", csv_completado,
                            'precipitacion_mensual_completada.csv', 'text/csv', key='download-completado')
 
+def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analysis):
+    st.header("Información Detallada de las Estaciones")
+    if not stations_for_analysis:
+        st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
+        return
+    
+    selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
+        else f"1 estación: {stations_for_analysis[0]}"
+    st.info(f"Mostrando información para {selected_stations_str} en el período "
+            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
 
+    if gdf_filtered.empty:
+        st.info("No hay estaciones que cumplan con los filtros geográficos y de datos seleccionados.")
+        return # Si no hay estaciones, no continuamos.
+
+    # Prepara la tabla base con la información geográfica
+    df_info_table = gdf_filtered[[Config.STATION_NAME_COL, Config.ALTITUDE_COL,
+                                  Config.MUNICIPALITY_COL, Config.REGION_COL,
+                                  Config.PERCENTAGE_COL]].copy()
+
+    # Calcula y une la precipitación media anual si hay datos anuales disponibles
+    if not df_anual_melted.empty:
+        df_mean_precip = \
+            df_anual_melted.groupby(Config.STATION_NAME_COL)[Config.PRECIPITATION_COL].mean().round(0).reset_index()
+        df_mean_precip.rename(columns={Config.PRECIPITATION_COL: 'Precipitación media anual (mm)'}, inplace=True)
+        df_info_table = df_info_table.merge(df_mean_precip, on=Config.STATION_NAME_COL,
+                                            how='left')
+    else:
+        # Si no hay datos anuales, añade la columna con un valor indicativo
+        df_info_table['Precipitación media anual (mm)'] = 'N/A'
 
     st.dataframe(df_info_table.drop(columns=[Config.PERCENTAGE_COL]).set_index(Config.STATION_
                                                                               NAME_COL), use_container_width=True)
