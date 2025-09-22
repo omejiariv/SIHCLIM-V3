@@ -19,7 +19,7 @@ from pykrige.ok import OrdinaryKriging
 from scipy import stats
 from scipy.interpolate import Rbf 
 import pymannkendall as mk
-from prophet.plot import plot_plotly # Se mantiene solo para la función de ploteo de Prophet
+from prophet.plot import plot_plotly
 
 # --- Importaciones de Módulos Propios (Refactorizados) ---
 from modules.config import Config
@@ -1154,10 +1154,8 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     df_plot_scatter = data_year_with_geom.drop(columns=['geometry']).copy()
                     
                     # Corregimos la paleta de colores a un estándar de Plotly.
-                    # Se usa z_grid.T en go.Contour si RBF ya fue transpuesta,
-                    # para Kriging/IDW debe ser transpuesta para el Contour.
                     # Asumimos que los métodos de Kriging/IDW devuelven el resultado en la orientación
-                    # que espera go.Contour después de la transposición en interpolate_idw
+                    # que espera go.Contour después de la transposición en interpolate_idw/rbf
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
                                                     colorscale=px.colors.sequential.YIGnBu,
                                                     contours=dict(showlabels=True,
@@ -2344,12 +2342,13 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
 
     st.markdown("#### Parámetros del Análisis")
     col1, col2 = st.columns(2)
-    p_lower = col1.slider("Percentil Inferior (Sequía):", 1, 40, 10, key="p_lower")
-    p_upper = col2.slider("Percentil Superior (Húmedo):", 60, 99, 90, key="p_upper")
+    p_lower = col1.slider("Percentil Inferior (Sequía):", 1, 40, 10, key="p_lower_perc")
+    p_upper = col2.slider("Percentil Superior (Húmedo):", 60, 99, 90, key="p_upper_perc")
     
     st.markdown("---")
 
-    with st.spinner(f"Calculando percentiles {p_lower} y {p_upper} para {station_to_analyze_perc}...")
+    # CORRECCIÓN DE SINTAXIS: Se elimina el paréntesis extra después de 'st.spinner(...)'
+    with st.spinner(f"Calculando percentiles {p_lower} y {p_upper} para {station_to_analyze_perc}...") :
         try:
             # LLAMADA AL MÓDULO ANALYSIS
             df_extremes, df_thresholds = calculate_percentiles_and_extremes(
