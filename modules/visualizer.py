@@ -745,17 +745,28 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     st.session_state['gif_reload_key'] += 1
                     st.rerun()
                 
-                # Usamos una métrica para asegurar que el estado de sesión se actualice
+                # Se puede mantener esta métrica para debug si se desea
                 # st.metric(label="Clave de Recarga (Debug)", value=st.session_state['gif_reload_key'], delta=None)
 
             with col_gif:
-                # CORRECCIÓN DE TYPEERROR: Usamos key=f"..." y se simplifica la inyección
-                st.image(
-                    Config.GIF_PATH,
-                    caption='Animación PPAM',
-                    width=None, # Permite que Streamlit decida el ancho
-                    key=f"ppam_gif_{st.session_state['gif_reload_key']}" 
-                )
+                try:
+                    # MÉTODO ROBUSTO: Codificar en Base64 e inyectar en Markdown
+                    # Esto evita el TypeError en st.image(key=...)
+                    with open(Config.GIF_PATH, "rb") as file:
+                        contents = file.read()
+                    data_url = base64.b64encode(contents).decode("utf-8")
+                    
+                    # Usamos st.markdown para inyectar el GIF con la clave de sesión
+                    # El 'key' se usa aquí en el elemento HTML para forzar el re-renderizado
+                    st.markdown(
+                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
+                        f'style="width:70%; max-width: 600px;" '
+                        f'key="gif_display_{st.session_state["gif_reload_key"]}">', # Usamos la clave de sesión en el tag
+                        unsafe_allow_html=True
+                    )
+                    
+                except Exception as e:
+                    st.warning(f"Error al cargar/mostrar GIF: {e}")
 
         else:
             st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
