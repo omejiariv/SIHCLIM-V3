@@ -1198,20 +1198,21 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 
                 return go.Figure().update_layout(title="Error: Método no implementado"), None
             
-            # This is the new rendering logic that will solve the layout issue.
-            col1, col2 = st.columns(2)
-            with col1:
+            map_col1, map_col2 = st.columns(2)
+
+            with map_col1:
                 with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
                     fig1, fig_var1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
                     st.plotly_chart(fig1, use_container_width=True)
 
-            with col2:
+            with map_col2:
                 with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
                     fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
 
-            col3, col4 = st.columns(2)
-            with col3:
+            col_var1, col_var2 = st.columns(2)
+            
+            with col_var1:
                 if fig_var1:
                     st.markdown("##### Variograma del Mapa 1")
                     st.pyplot(fig_var1)
@@ -1227,7 +1228,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 else:
                     st.info("El variograma no está disponible para este método o no hay suficientes datos.")
             
-            with col4:
+            with col_var2:
                 if fig_var2:
                     st.markdown("##### Variograma del Mapa 2")
                     st.pyplot(fig_var2)
