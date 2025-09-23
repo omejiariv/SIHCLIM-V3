@@ -1166,7 +1166,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # CORRECCIÓN: Llamamos a display_variogram_model sin el argumento 'ax'
+                        # CORRECCIÓN: Llamada a display_variogram_model sin el argumento 'ax'
                         fig_variogram = ok.display_variogram_model()
                         
                         st.markdown("##### Variograma del Mapa")
@@ -1179,7 +1179,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                             file_name=f"variograma_{year}_{variogram_model}.png",
                             mime="image/png"
                         )
-                        plt.close(fig_variogram) # Cierra la figura para evitar warnings
+                        plt.close(fig_variogram)
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
@@ -1220,7 +1220,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
                     fig2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
-
+                    
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
     st.markdown("Esta sección ofrece dos metodologías para identificar eventos extremos: el "
