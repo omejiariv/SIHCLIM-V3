@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import spei
-from scipy.stats import gamma, norm
+from scipy.stats import gamma, norm, loglaplace # <-- 1. IMPORTAR LA DISTRIBUCIÓN
 from modules.config import Config
 
 # --- Funciones de Análisis ---
@@ -105,21 +105,17 @@ def calculate_spei(precip_series, et_series, scale):
     Returns:
         pd.Series: Serie de tiempo con los valores del SPEI.
     """
-    # Nos aseguramos de que la escala sea un número entero.
     scale = int(scale)
 
-    # 1. Asegurarse de que los índices coincidan
     data = pd.DataFrame({'precip': precip_series, 'et': et_series}).dropna()
 
     if data.empty:
         return pd.Series(dtype=float)
 
-    # 2. Calcular la diferencia entre Precipitación y ET (Balance Hídrico)
     water_balance = data['precip'] - data['et']
 
-    # 3. Calcular el SPEI usando una distribución Log-Logística
     # --- LÍNEA CORREGIDA ---
-    # Se corrige el orden de los argumentos: primero la distribución y luego la escala.
-    spei_values = spei.spei(water_balance, 'log-logistic', scale)
+    # 2. Se pasa el objeto de distribución 'loglaplace' directamente.
+    spei_values = spei.spei(water_balance, loglaplace, scale)
 
     return spei_values
