@@ -73,17 +73,20 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         df_station_monthly_avg = \
             df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
         
+        # Corrección: Verificar si el DataFrame del mini-gráfico no está vacío.
         if not df_station_monthly_avg.empty:
             df_monthly_avg = \
                 df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
 
-            fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL],
-                                         y=df_monthly_avg[Config.PRECIPITATION_COL])])
-            fig.update_layout(title=f"Ppt. Mensual Media",
-                              xaxis_title="Mes", yaxis_title="Ppt. (mm)", height=250, width=350,
-                              margin=dict(t=50, b=20, l=20, r=20))
-            popup_html_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
-            html_content += f"<hr>{popup_html_chart}"
+            # Asegurar que el DataFrame resultante para el gráfico no esté vacío
+            if not df_monthly_avg.empty:
+                fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL],
+                                             y=df_monthly_avg[Config.PRECIPITATION_COL])])
+                fig.update_layout(title=f"Ppt. Mensual Media",
+                                  xaxis_title="Mes", yaxis_title="Ppt. (mm)", height=250, width=350,
+                                  margin=dict(t=50, b=20, l=20, r=20))
+                popup_html_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
+                html_content += f"<hr>{popup_html_chart}"
             
     return html_content
 
