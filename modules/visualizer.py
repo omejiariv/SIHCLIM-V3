@@ -1199,7 +1199,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                                     colorscale=px.colors.sequential.YlGnBu,
                                                     contours=dict(showlabels=True,
                                                                   labelfont=dict(size=10, color='white'),
-                                                                  labelfournat="d"
+                                                                  labelformat=".0f" # <-- CORRECCIÓN AQUÍ: Cambiado a "labelformat" y ".0f" para enteros
                                                                   )))
                     
                     fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
