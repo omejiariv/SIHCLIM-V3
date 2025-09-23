@@ -1229,7 +1229,7 @@ def display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for
     st.header("Análisis de Extremos Hidrológicos")
     st.markdown("Esta sección permite identificar eventos extremos usando el **análisis de percentiles** o "
                 "evaluar la intensidad de la sequía/humedad con los índices **SPI** (basado en precipitación) y "
-                "**SPEI** (basado en precipitación y temperatura).")
+                "**SPEI** (basado en precipitación y evapotranspiración).")
 
     if not stations_for_analysis:
         st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
@@ -1244,20 +1244,16 @@ def display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for
         if station_to_analyze_perc:
             display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc)
 
-    # --- INICIO DE LA MODIFICACIÓN ---
     with indices_sub_tab:
         st.subheader("Análisis con Índices Estandarizados")
         
         col1_idx, col2_idx = st.columns([1, 2])
         
         with col1_idx:
-            # Widget para seleccionar el tipo de índice
             index_type = st.radio("Seleccione el Índice a Calcular:", ("SPI", "SPEI"))
-            
             station_to_analyze_idx = st.selectbox("Seleccione una estación para el análisis:",
                                                   options=sorted(stations_for_analysis),
                                                   key="index_station_select")
-            
             index_window = st.select_slider("Seleccione la escala de tiempo (meses):",
                                            options=[3, 6, 9, 12, 24], value=12, key="index_window_slider",
                                            help="Escalas cortas (3m) reflejan sequías agrícolas. Escalas largas (12-24m) reflejan sequías hidrológicas.")
@@ -1277,25 +1273,24 @@ def display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for
                     with st.spinner(f"Calculando SPI-{index_window}..."):
                         index_values = calculate_spi(precip_series, index_window)
 
+            # --- CAMBIO: Lógica para usar la columna ET_COL ---
             elif index_type == "SPEI":
-                # Para SPEI, necesitamos precipitación, temperatura y latitud
-                if 'temp_media' not in df_station_idx.columns or df_station_idx['temp_media'].isnull().all():
+                if Config.ET_COL not in df_station_idx.columns or df_station_idx[Config.ET_COL].isnull().all():
                     with col2_idx:
-                        st.error("No hay datos de temperatura ('temp_media') disponibles para esta estación. No se puede calcular el SPEI.")
+                        st.error(f"No hay datos de evapotranspiración ('{Config.ET_COL}') disponibles para esta estación. No se puede calcular el SPEI.")
                 else:
                     precip_series = df_station_idx[Config.PRECIPITATION_COL]
-                    temp_series = df_station_idx['temp_media']
-                    # Obtenemos la latitud del geodataframe
-                    station_lat = gdf_filtered[gdf_filtered[Config.STATION_NAME_COL] == station_to_analyze_idx].iloc[0].geometry.y
+                    et_series = df_station_idx[Config.ET_COL] # Usamos la columna de ET
                     
-                    if len(precip_series.dropna()) < index_window * 2 or len(temp_series.dropna()) < index_window * 2:
+                    if len(precip_series.dropna()) < index_window * 2 or len(et_series.dropna()) < index_window * 2:
                         with col2_idx:
-                            st.warning(f"No hay suficientes datos de precipitación o temperatura para calcular el SPEI-{index_window}.")
+                            st.warning(f"No hay suficientes datos de precipitación o evapotranspiración para calcular el SPEI-{index_window}.")
                     else:
                         with st.spinner(f"Calculando SPEI-{index_window}..."):
-                            index_values = calculate_spei(precip_series, temp_series, station_lat, index_window)
+                            # Llamamos a la nueva función simplificada
+                            index_values = calculate_spei(precip_series, et_series, index_window)
             
-            # Graficar los resultados si se calcularon valores
+            # El resto del código para graficar no cambia
             if not index_values.empty:
                 df_plot = pd.DataFrame({'index_val': index_values}).dropna()
                 
