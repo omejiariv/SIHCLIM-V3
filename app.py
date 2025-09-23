@@ -1,4 +1,4 @@
-# app.py (Función main() corregida y completa)
+# app.py
 
 # -*- coding: utf-8 -*-
 
