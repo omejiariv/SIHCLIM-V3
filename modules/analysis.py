@@ -105,8 +105,7 @@ def calculate_spei(precip_series, et_series, scale):
     Returns:
         pd.Series: Serie de tiempo con los valores del SPEI.
     """
-    # --- LÍNEA CRÍTICA DE CORRECCIÓN ---
-    # Nos aseguramos de que la escala sea un número entero antes de usarla.
+    # Nos aseguramos de que la escala sea un número entero.
     scale = int(scale)
 
     # 1. Asegurarse de que los índices coincidan
@@ -119,7 +118,8 @@ def calculate_spei(precip_series, et_series, scale):
     water_balance = data['precip'] - data['et']
 
     # 3. Calcular el SPEI usando una distribución Log-Logística
-    # Se pasa la distribución como un argumento posicional
-    spei_values = spei.spei(water_balance, scale, 'log-logistic')
+    # --- LÍNEA CORREGIDA ---
+    # Se corrige el orden de los argumentos: primero la distribución y luego la escala.
+    spei_values = spei.spei(water_balance, 'log-logistic', scale)
 
     return spei_values
