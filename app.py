@@ -9,7 +9,7 @@ import numpy as np
 import warnings
 import os
 
-# --- Importaciones de tus Módulos (Actualizadas)
+# --- Importaciones de tus Módulos
 from modules.config import Config
 from modules.data_processor import load_and_process_all_data, complete_series
 from modules.visualizer import (
