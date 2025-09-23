@@ -23,6 +23,7 @@ class Config:
     REGION_COL = 'depto_region'
     PERCENTAGE_COL = 'porc_datos'
     CELL_COL = 'celda_xy'
+    ET_COL = 'et_mmy'
     # Índices climáticos
     SOI_COL = 'soi'
     IOD_COL = 'iod'
