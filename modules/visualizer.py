@@ -53,7 +53,7 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         year_min, year_max = year_range_val
     else: # Fallback para modo comparación o si el formato es inesperado
         year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
-        
+
     total_years_in_period = year_max - year_min + 1
 
     df_station_data = df_anual_melted[df_anual_melted[Config.STATION_NAME_COL] == station_name]
@@ -80,24 +80,24 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
     # --- CORRECCIÓN DEL MINIGRÁFICO USANDO IFRAME ---
     if include_chart and df_monthly_filtered is not None:
         df_station_monthly_avg = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
-        
+
         if not df_station_monthly_avg.empty:
             df_monthly_avg = df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
-            
+
             if not df_monthly_avg.empty:
                 fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL], y=df_monthly_avg[Config.PRECIPITATION_COL])])
                 fig.update_layout(
                     title_text="Ppt. Mensual Media",
-                    xaxis_title="Mes", yaxis_title="Ppt. (mm)", 
+                    xaxis_title="Mes", yaxis_title="Ppt. (mm)",
                     height=250, width=350,
                     margin=dict(t=40, b=20, l=20, r=20)
                 )
                 chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-                
+
                 # Envolver el HTML del gráfico en un IFrame para un renderizado robusto en el popup
                 iframe = folium.IFrame(chart_html, width=370, height=270)
                 full_html_content = folium.Html(html_content + "<hr>", script=True)
-                
+
                 # Crear un popup que contenga tanto el texto como el iframe
                 popup = folium.Popup(max_width=400)
                 full_html_content.add_child(iframe)
@@ -253,10 +253,11 @@ def display_spatial_distribution_tab(gdf_filtered, stations_for_analysis, df_anu
     selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
         else f"1 estación: {stations_for_analysis[0]}"
 
+    # Usar el rango de años correcto dependiendo del modo
     year_range_val = st.session_state.get('year_range', (2000, 2020))
     if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
         year_min, year_max = year_range_val
-    else:
+    else: # Fallback para modo comparación o si el formato es inesperado
         year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
 
     st.info(f"Mostrando análisis para {selected_stations_str} en el período {year_min} - {year_max}.")
