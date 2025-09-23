@@ -27,21 +27,44 @@ class Config:
     # Índices climáticos
     SOI_COL = 'soi'
     IOD_COL = 'iod'
-    
-    # Rutas de Archivos (usando la ruta absoluta)
-    LOGO_PATH = os.path.join(BASE_DIR, "data", "Cuenca Verde_Logo.jpg")
-    LOGO_DROP_PATH = os.path.join(BASE_DIR, "data", "Cuenca Verde_Logo.jpg")
+
+    # --- RUTAS CORREGIDAS CON EL NOMBRE DE TU LOGO ---
+    # Se usará el mismo logo para ambos casos, como solicitaste.
+    LOGO_PATH = os.path.join(BASE_DIR, "data", "CuencaVerde_Logo.jpg")
+    LOGO_DROP_PATH = os.path.join(BASE_DIR, "data", "CuencaVerde_Logo.jpg")
     GIF_PATH = os.path.join(BASE_DIR, "data", "PPAM.gif")
 
     # Mensajes de la UI
     APP_TITLE = "Sistema de información de las lluvias y el Clima en el norte de la región Andina"
+
+    # --- TEXTO DE BIENVENIDA AMPLIADO ---
     WELCOME_TEXT = """
     Esta plataforma interactiva está diseñada para la visualización y análisis de datos históricos de
-    precipitación y su
-    relación con el fenómeno ENSO en el norte de la región Andina.
-    **¿Cómo empezar?**
+    precipitación y su relación con el fenómeno ENSO en el norte de la región Andina.
+
+    <h4>¿Cómo empezar?</h4>
+    <ol>
+        <li>
+            <b>Cargar Archivos:</b> En el panel de la izquierda, despliega la sección
+            <b>"Cargar Archivos"</b> y sube los 3 archivos requeridos:
+            <ul>
+                <li>Archivo de estaciones (CSV)</li>
+                <li>Archivo de precipitación y ENSO (CSV)</li>
+                <li>Shapefile de municipios (ZIP)</li>
+            </ul>
+        </li>
+        <li>
+            <b>Aplicar Filtros:</b> Una vez cargados los datos, utiliza los paneles
+            <b>"Filtros Geográficos"</b> y <b>"Selección de Estaciones y Período"</b>
+            para acotar tu análisis por región, municipio, altitud, rango de años y meses.
+        </li>
+        <li>
+            <b>Explorar Análisis:</b> Navega a través de las diferentes pestañas en la parte superior
+            para visualizar los datos en mapas, gráficos, tablas y análisis de tendencias.
+        </li>
+    </ol>
     """
-    
+
     @staticmethod
     def initialize_session_state():
         """Inicializa todas las variables necesarias en el estado de la sesión de Streamlit."""
