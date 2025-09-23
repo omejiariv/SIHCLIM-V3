@@ -1147,14 +1147,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     on=Config.STATION_NAME_COL
                 )
                 
-                # Para la unión posterior con GeoDataFrame, necesitamos la columna 'geometry'
-                # La volvemos a crear usando las coordenadas LAT/LON que se usaron para el merge,
-                # ya que data_year_with_geom perdió la columna 'geometry' en la selección inicial
-                data_year_with_geom_geo = gpd.GeoDataFrame(data_year_with_geom, 
-                                                            geometry=gpd.points_from_xy(data_year_with_geom[Config.LONGITUDE_COL], data_year_with_geom[Config.LATITUDE_COL]),
-                                                            crs="EPSG:4326")
-
-                if len(data_year_with_geom_geo) < 4:
+                if len(data_year_with_geom) < 4:
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
@@ -1175,8 +1168,10 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # CORRECCIÓN: Volvemos a la lógica original de PyKrige para evitar el AttributeError
-                        fig_variogram = ok.display_variogram_model()
+                        # CORRECCIÓN PARA EVITAR EL AttributeError: 'NoneType'
+                        plt.figure() # Crea una nueva figura global
+                        ok.display_variogram_model() # Dibuja en la figura actual
+                        fig_variogram = plt.gcf() # Obtiene la figura actual
                         
                         st.markdown("##### Variograma del Mapa")
                         st.pyplot(fig_variogram)
@@ -1188,7 +1183,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                             file_name=f"variograma_{year}_{variogram_model}.png",
                             mime="image/png"
                         )
-                        plt.close(fig_variogram)
+                        plt.close(fig_variogram) # Cierra la figura para evitar warnings
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
