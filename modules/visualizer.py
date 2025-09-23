@@ -15,12 +15,12 @@ import os
 import base64
 import branca.colormap as cm
 import matplotlib.cm as mpl_cm 
-import matplotlib.pyplot as plt
 from pykrige.ok import OrdinaryKriging
 from scipy import stats
 from scipy.interpolate import Rbf 
 import pymannkendall as mk
 from prophet.plot import plot_plotly
+import matplotlib.pyplot as plt # Importado para la visualización de variogramas
 
 # --- Importaciones de Módulos Propios (Refactorizados) ---
 from modules.config import Config
@@ -93,6 +93,7 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
     
     return html_content
 
+# 
 # Funciones de Creación de Gráficos y Mapas
 # 
 def create_enso_chart(enso_data):
@@ -750,28 +751,13 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     st.session_state['gif_reload_key'] += 1
                     st.rerun()
                 
-                # Se puede mantener esta métrica para debug si se desea
-                # st.metric(label="Clave de Recarga (Debug)", value=st.session_state['gif_reload_key'], delta=None)
-
             with col_gif:
-                try:
-                    # MÉTODO ROBUSTO: Codificar en Base64 e inyectar en Markdown
-                    # Esto evita el TypeError en st.image(key=...)
-                    with open(Config.GIF_PATH, "rb") as file:
-                        contents = file.read()
-                    data_url = base64.b64encode(contents).decode("utf-8")
-                    
-                    # Usamos st.markdown para inyectar el GIF con la clave de sesión
-                    # El 'key' se usa aquí en el elemento HTML para forzar el re-renderizado
-                    st.markdown(
-                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
-                        f'style="width:70%; max-width: 600px;" '
-                        f'key="gif_display_{st.session_state["gif_reload_key"]}">', # Usamos la clave de sesión en el tag
-                        unsafe_allow_html=True
-                    )
-                    
-                except Exception as e:
-                    st.warning(f"Error al cargar/mostrar GIF: {e}")
+                st.image(
+                    Config.GIF_PATH,
+                    caption='Animación PPAM',
+                    width=None,
+                    key=f"ppam_gif_{st.session_state['gif_reload_key']}" 
+                )
 
         else:
             st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
@@ -1126,11 +1112,21 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 year1 = st.slider("Seleccione el año", min_year, max_year, max_year, key="interp_year1")
                 method1 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
                                                                          "Spline (Thin Plate)"], key="interp_method1")
+                variogram_model1 = None
+                if method1 == "Kriging Ordinario":
+                    variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
+                    variogram_model1 = st.selectbox("Modelo de Variograma para Mapa 1", variogram_options, key="var_model_1")
+
+                st.markdown("---")
                 st.markdown("**Mapa 2**")
                 year2 = st.slider("Seleccione el año", min_year, max_year, max_year - 1 if max_year >
                                   min_year else max_year, key="interp_year2")
                 method2 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
                                                                          "Spline (Thin Plate)"], index=1, key="interp_method2")
+                variogram_model2 = None
+                if method2 == "Kriging Ordinario":
+                    variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
+                    variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
 
             def generate_interpolation_map(year, method, variogram_model, gdf_filtered_map):
                 data_year_with_geom = pd.merge(
@@ -1140,7 +1136,14 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     on=Config.STATION_NAME_COL
                 )
                 
-                if len(data_year_with_geom) < 4:
+                # Para la unión posterior con GeoDataFrame, necesitamos la columna 'geometry'
+                # La volvemos a crear usando las coordenadas LAT/LON que se usaron para el merge,
+                # ya que data_year_with_geom perdió la columna 'geometry' en la selección inicial
+                data_year_with_geom_geo = gpd.GeoDataFrame(data_year_with_geom, 
+                                                            geometry=gpd.points_from_xy(data_year_with_geom[Config.LONGITUDE_COL], data_year_with_geom[Config.LATITUDE_COL]),
+                                                            crs="EPSG:4326")
+
+                if len(data_year_with_geom_geo) < 4:
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
@@ -1160,6 +1163,18 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
+                        
+                        # Visualización del variograma
+                        fig_variogram = ok.display_variogram_model()
+                        st.pyplot(fig_variogram)
+                        buf = io.BytesIO()
+                        fig_variogram.savefig(buf, format="png")
+                        st.download_button(
+                            label="Descargar Variograma (PNG)",
+                            data=buf.getvalue(),
+                            file_name=f"variograma_{year}_{variogram_model}.png",
+                            mime="image/png"
+                        )
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
@@ -1174,9 +1189,8 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
                                                     colorscale=px.colors.sequential.YlGnBu,
                                                     contours=dict(showlabels=True,
-                                                                  # CORRECCIÓN: Formato de etiquetas como enteros
                                                                   labelfont=dict(size=10, color='white'),
-                                                                  labelfournat="d" # <-- Formato para números enteros
+                                                                  labelfournat="d"
                                                                   )))
                     
                     fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
@@ -1191,22 +1205,17 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 
                 return go.Figure().update_layout(title="Error: Método no implementado")
 
-            # Ahora necesitamos pasar el modelo de variograma como un argumento
-            variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
-            variogram_model1 = st.selectbox("Modelo de Variograma para Mapa 1", variogram_options, key="var_model_1")
-            
             # Llamadas a la función de interpolación con el nuevo argumento
             with map_col1:
                 with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
                     fig1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
                     st.plotly_chart(fig1, use_container_width=True)
 
-            variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
-
             with map_col2:
                 with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
                     fig2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
+
 
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
