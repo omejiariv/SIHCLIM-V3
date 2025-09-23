@@ -301,7 +301,8 @@ def display_spatial_distribution_tab(gdf_filtered, stations_for_analysis, df_anu
                             bounds = gdf_display.total_bounds
                             if np.all(np.isfinite(bounds)):
                                 center_lat = (bounds[1] + bounds[3]) / 2
-                                center_lon = (bounds[0] + bounds[2]) / 2
+                                center_lon = (bounds[0] +
+                                              bounds[2]) / 2
                                 st.session_state.map_view = {"location": [center_lat, center_lon], "zoom": 9}
                 st.markdown("---")
 
@@ -874,7 +875,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                                 # Reutilización del popup:
                                 popup_html = generate_station_popup_html(row, df_anual_melted)
                                 
-                                # Usamos la geometría de GeoDataFrame para ubicación precisa del marcador
                                 folium.CircleMarker(
                                     location=[row['geometry'].y, row['geometry'].x],
                                     radius=5,
@@ -1144,7 +1144,10 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                             z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                             
                             # CÓDIGO CORREGIDO PARA EL VARIOGRAMA
-                            fig_variogram = ok.display_variogram_model()
+                            # Se crea una figura explícita y se usa plt.gcf() para obtenerla
+                            fig_variogram = plt.figure()
+                            ok.display_variogram_model()
+                            plt.close(fig_variogram)
                         elif method == "IDW":
                             z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                         elif method == "Spline (Thin Plate)":
@@ -1176,7 +1179,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                     return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
 
                 # Layout para los controles
-                control_col, display_col = st.columns([1, 2])
+                control_col, map_col1, map_col2 = st.columns([1, 2, 2])
                 
                 with control_col:
                     st.markdown("##### Controles de los Mapas")
@@ -1202,7 +1205,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
 
                 # Generación de mapas y variogramas
                 fig1, fig_var1, error1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
-                fig2, fig_var2, error2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
+                fig2, fig_var2, error2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                 
                 # Renderiza el contenido en la columna de visualización
                 with display_col:
