@@ -33,7 +33,6 @@ from modules.forecasting import (
     get_decomposition_results, create_acf_chart, create_pacf_chart
 )
 
-
 # Inicializamos una variable de estado para controlar el reinicio del GIF
 if 'gif_reload_key' not in st.session_state:
     st.session_state['gif_reload_key'] = 0
@@ -302,7 +301,8 @@ def display_spatial_distribution_tab(gdf_filtered, stations_for_analysis, df_anu
                             bounds = gdf_display.total_bounds
                             if np.all(np.isfinite(bounds)):
                                 center_lat = (bounds[1] + bounds[3]) / 2
-                                center_lon = (bounds[0] + bounds[2]) / 2
+                                center_lon = (bounds[0] +
+                                              bounds[2]) / 2
                                 st.session_state.map_view = {"location": [center_lat, center_lon], "zoom": 9}
                 st.markdown("---")
 
@@ -1101,7 +1101,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
         else:
             st.warning("No hay años disponibles para la comparación.")
 
-     with kriging_tab:
+    with kriging_tab:
         st.subheader("Comparación de Superficies de Interpolación Anual")
         df_anual_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
 
@@ -1113,8 +1113,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
             min_year, max_year = int(df_anual_non_na[Config.YEAR_COL].min()), \
                                  int(df_anual_non_na[Config.YEAR_COL].max())
             
-            # --- Nuevo Layout de 3 Columnas ---
-            control_col, map_col1, map_col2 = st.columns([1, 2, 2])
+            control_col, display_col = st.columns([1, 2])
             
             with control_col:
                 st.markdown("##### Controles de los Mapas")
@@ -1147,7 +1146,10 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 )
                 
                 if len(data_year_with_geom) < 4:
-                    return None, None
+                    fig = go.Figure()
+                    fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
+                                      xaxis_visible=False, yaxis_visible=False)
+                    return fig, None
                 
                 lons = data_year_with_geom[Config.LONGITUDE_COL].values
                 lats = data_year_with_geom[Config.LATITUDE_COL].values
@@ -1165,13 +1167,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # Generación del variograma con un control de errores
-                        try:
-                            fig_variogram = ok.display_variogram_model()
-                        except Exception as e:
-                            st.warning(f"No se pudo generar el variograma para el año {year}: {e}")
-                            fig_variogram = None
-                            
+                        fig_variogram = ok.display_variogram_model()
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
@@ -1180,7 +1176,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         z_grid = z_grid_raw.T 
                 except Exception as e:
                     st.error(f"Error al calcular {method} para el año {year}: {e}")
-                    return None, None
+                    return go.Figure().update_layout(title=f"Error en {method} para {year}"), None
 
                 if z_grid is not None:
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
@@ -1200,34 +1196,36 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
                     return fig, fig_variogram
                 
-                return None, None
-
-            # --- Mapear y Generar los Mapas ---
+                return go.Figure().update_layout(title="Error: Método no implementado"), None
+            
+            # Here we render the maps first, and then the variograms.
+            # This is the new rendering logic that will solve the layout issue.
+            
+            # Generate the data for both maps
             fig1, fig_var1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
             fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
 
-            # --- Sección de Mapas ---
+            # Map section
             with display_col:
-                st.markdown("##### Mapas Interpolados")
-                map_display_col1, map_display_col2 = st.columns(2)
-                with map_display_col1:
+                col1, col2 = st.columns(2)
+                with col1:
                     if fig1:
                         st.plotly_chart(fig1, use_container_width=True)
                     else:
                         st.info(f"El mapa 1 no se pudo generar para el año {year1} con el método {method1}.")
-                with map_display_col2:
+
+                with col2:
                     if fig2:
                         st.plotly_chart(fig2, use_container_width=True)
                     else:
                         st.info(f"El mapa 2 no se pudo generar para el año {year2} con el método {method2}.")
 
-            # --- Sección de Variogramas ---
-            with display_col:
                 st.markdown("---")
                 st.markdown("##### Variogramas de los Mapas")
-                variogram_display_col1, variogram_display_col2 = st.columns(2)
+                col3, col4 = st.columns(2)
                 
-                with variogram_display_col1:
+                # Variogram 1
+                with col3:
                     if fig_var1:
                         st.pyplot(fig_var1)
                         buf = io.BytesIO()
@@ -1242,7 +1240,8 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     else:
                         st.info("El variograma no está disponible para este método o no hay suficientes datos.")
                 
-                with variogram_display_col2:
+                # Variogram 2
+                with col4:
                     if fig_var2:
                         st.pyplot(fig_var2)
                         buf = io.BytesIO()
