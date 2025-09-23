@@ -752,12 +752,21 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     st.rerun()
                 
             with col_gif:
-                st.image(
-                    Config.GIF_PATH,
-                    caption='Animación PPAM',
-                    width=None,
-                    key=f"ppam_gif_{st.session_state['gif_reload_key']}" 
-                )
+                try:
+                    # Volvemos a la implementación original más compatible
+                    with open(Config.GIF_PATH, "rb") as file:
+                        contents = file.read()
+                    data_url = base64.b64encode(contents).decode("utf-8")
+                    
+                    st.markdown(
+                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
+                        f'style="width:70%; max-width: 600px;" '
+                        f'key="gif_display_{st.session_state["gif_reload_key"]}">',
+                        unsafe_allow_html=True
+                    )
+                    
+                except Exception as e:
+                    st.warning(f"Error al cargar/mostrar GIF: {e}")
 
         else:
             st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
