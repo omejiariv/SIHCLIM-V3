@@ -122,7 +122,6 @@ def calculate_spei(precip_series, et_series, scale):
     water_balance = data['precip'] - data['et']
 
     # 3. Calcular el SPEI usando una distribución Log-Logística
-    # --- LÍNEA CORREGIDA ---
     # Se cambia 'dist' por el nombre completo del argumento 'distribution'
     spei_values = spei.spei(water_balance, scale, 'log-logistic')
 
