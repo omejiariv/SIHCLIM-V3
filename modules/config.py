@@ -5,7 +5,6 @@ import pandas as pd
 import os
 
 # Define la ruta base del proyecto de forma robusta
-# Asume que los archivos de datos están en 'data' y los módulos en 'modules'
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class Config:
@@ -28,8 +27,7 @@ class Config:
     SOI_COL = 'soi'
     IOD_COL = 'iod'
 
-    # --- RUTAS CORREGIDAS CON EL NOMBRE DE TU LOGO ---
-    # Se usará el mismo logo para ambos casos, como solicitaste.
+    # Rutas de Archivos
     LOGO_PATH = os.path.join(BASE_DIR, "data", "CuencaVerde_Logo.jpg")
     LOGO_DROP_PATH = os.path.join(BASE_DIR, "data", "CuencaVerde_Logo.jpg")
     GIF_PATH = os.path.join(BASE_DIR, "data", "PPAM.gif")
@@ -37,30 +35,43 @@ class Config:
     # Mensajes de la UI
     APP_TITLE = "Sistema de información de las lluvias y el Clima en el norte de la región Andina"
 
-    # --- TEXTO DE BIENVENIDA AMPLIADO ---
+    # --- TEXTO DE BIENVENIDA ACTUALIZADO ---
     WELCOME_TEXT = """
+    <p style="text-align: center; font-style: italic; font-size: 1.1em;">
+    "El futuro, también depende del pasado y de nuestra capacidad presente para anticiparlo". — omr.
+    </p>
+    <hr>
+    <p>
     Esta plataforma interactiva está diseñada para la visualización y análisis de datos históricos de
     precipitación y su relación con el fenómeno ENSO en el norte de la región Andina.
+    </p>
 
     <h4>¿Cómo empezar?</h4>
     <ol>
         <li>
-            <b>Cargar Archivos:</b> En el panel de la izquierda, despliega la sección
-            <b>"Cargar Archivos"</b> y sube los 3 archivos requeridos:
+            <b>Cargue sus archivos:</b> Si es la primera vez que usa la aplicación, el panel de la izquierda le
+            solicitará cargar los archivos de estaciones, precipitación y el shapefile de municipios.
+            La aplicación recordará estos archivos en su sesión.
+        </li>
+        <li>
+            <b>Filtre los datos:</b> Una vez cargados los datos, utilice el <b>Panel de Control</b> en la barra
+            lateral para filtrar las estaciones por ubicación (región, municipio), altitud,
+            porcentaje de datos disponibles, y para seleccionar el período de análisis (años y meses).
+        </li>
+        <li>
+            <b>Explore las pestañas:</b> Cada pestaña ofrece una perspectiva diferente de los datos.
+            Navegue a través de ellas para descubrir:
             <ul>
-                <li>Archivo de estaciones (CSV)</li>
-                <li>Archivo de precipitación y ENSO (CSV)</li>
-                <li>Shapefile de municipios (ZIP)</li>
+                <li><b>Distribución Espacial:</b> Mapas interactivos de las estaciones.</li>
+                <li><b>Gráficos:</b> Series de tiempo anuales, mensuales, comparaciones y distribuciones.</li>
+                <li><b>Mapas Avanzados:</b> Animaciones y mapas de interpolación.</li>
+                <li><b>Análisis de Anomalías:</b> Desviaciones de la precipitación respecto a la media histórica.</li>
+                <li><b>Tendencias y Pronósticos:</b> Análisis de tendencias a largo plazo y modelos de pronóstico.</li>
             </ul>
-        </li>
-        <li>
-            <b>Aplicar Filtros:</b> Una vez cargados los datos, utiliza los paneles
-            <b>"Filtros Geográficos"</b> y <b>"Selección de Estaciones y Período"</b>
-            para acotar tu análisis por región, municipio, altitud, rango de años y meses.
-        </li>
-        <li>
-            <b>Explorar Análisis:</b> Navega a través de las diferentes pestañas en la parte superior
-            para visualizar los datos en mapas, gráficos, tablas y análisis de tendencias.
+            <p>
+            Utilice el botón <b>🔄 Limpiar Filtros</b> en el panel lateral para reiniciar su selección en cualquier
+            momento.
+            </p>
         </li>
     </ol>
     """
