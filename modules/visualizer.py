@@ -2161,7 +2161,7 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
 
                 for station in stations_for_analysis:
                     station_data = df_anual_calc[df_anual_calc[Config.STATION_NAME_COL] ==
-                                                 station].dropna(subset=[Config.PRECIPITATION_COL]).sort_values(by=Config.YEAR_
+                                                 station].dropna(subset=[Config.PRECIPITATION_COL]).sort_values(by=Config.YEAR_COL)
                     
                     slope_lin, p_lin = np.nan, np.nan
                     trend_mk, p_mk, slope_sen = "Datos insuficientes", np.nan, np.nan
