@@ -87,10 +87,11 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
                                   margin=dict(t=50, b=20, l=20, r=20))
                 popup_html_chart = fig.to_html(full_html=False, include_plotlyjs='cdn')
                 html_content += f"<hr>{popup_html_chart}"
-            
+            else:
+                html_content += "<hr><p>Mini-gráfico: Módulo en Desarrollo</p>"
+    
     return html_content
 
-# 
 # Funciones de Creación de Gráficos y Mapas
 # 
 def create_enso_chart(enso_data):
