@@ -722,539 +722,529 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
             df_regional_avg.rename(columns={'Precipitación Promedio': 'Precipitación Promedio Regional (mm)'}, inplace=True)
             st.dataframe(df_regional_avg.round(1), use_container_width=True)
 
-def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analysis,
-                             df_monthly_filtered):
-    st.header("Mapas Avanzados")
-    if not stations_for_analysis:
-        st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
-        return
-    
-    selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
-        else f"1 estación: {stations_for_analysis[0]}"
-    st.info(f"Mostrando análisis para {selected_stations_str} en el período "
-            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
-    
-    tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
-                 "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
-    gif_tab, mapa_interactivo_tab, temporal_tab, race_tab, anim_tab, compare_tab, kriging_tab = \
-        st.tabs(tab_names)
-
-    with gif_tab:
-        st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
+    with display_advanced_maps_tab:
+        st.header("Mapas Avanzados")
+        if not stations_for_analysis:
+            st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
+            return
         
-        if os.path.exists(Config.GIF_PATH):
-            col_controls, col_gif = st.columns([1, 3])
-            
-            with col_controls:
-                # Botón de reinicio que incrementa la clave para forzar la recarga
-                if st.button("🔄 Reiniciar Animación"):
-                    st.session_state['gif_reload_key'] += 1
-                    st.rerun()
-                
-            with col_gif:
-                try:
-                    # Volvemos a la implementación original más compatible
-                    with open(Config.GIF_PATH, "rb") as file:
-                        contents = file.read()
-                    data_url = base64.b64encode(contents).decode("utf-8")
-                    
-                    st.markdown(
-                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
-                        f'style="width:70%; max-width: 600px;" '
-                        f'key="gif_display_{st.session_state["gif_reload_key"]}">',
-                        unsafe_allow_html=True
-                    )
-                    
-                except Exception as e:
-                    st.warning(f"Error al cargar/mostrar GIF: {e}")
-
-        else:
-            st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
-
-    with mapa_interactivo_tab:
-        st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
-        station_to_show = st.selectbox("Seleccione la estación a visualizar:",
-                                       options=sorted(stations_for_analysis), key="station_map_select")
-        
-        if station_to_show:
-            controls_col, map_col = st.columns([1, 3])
-            with controls_col:
-                st.subheader("Controles del Mapa")
-                selected_base_map_config, selected_overlays_config = display_map_controls(st,
-                                                                                         "avanzado_estaciones")
-            with map_col:
-                station_data_list = gdf_filtered[gdf_filtered[Config.STATION_NAME_COL] ==
-                                                  station_to_show]
-                if not station_data_list.empty:
-                    station_data = station_data_list.iloc[0]
-                    # Aumento de zoom para centrar en la estación
-                    m = create_folium_map(
-                        location=[station_data['geometry'].y, station_data['geometry'].x],
-                        zoom=10, # Aumentar el zoom para mejor visualización
-                        base_map_config=selected_base_map_config,
-                        overlays_config=selected_overlays_config
-                    )
-                    
-                    df_station_monthly_avg = \
-                        df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] ==
-                                              station_to_show]
-                    
-                    # Generar el mini-gráfico y popup
-                    if not df_station_monthly_avg.empty:
-                        # Reutilizar la lógica del popup, indicando que incluya el gráfico
-                        popup_html = generate_station_popup_html(station_data, df_anual_melted,
-                                                                 include_chart=True, df_monthly_filtered=df_monthly_filtered)
-                        folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
-                                      popup=folium.Popup(popup_html, max_width=400)).add_to(m)
-                    else:
-                        # Popup básico
-                        popup_html = generate_station_popup_html(station_data, df_anual_melted) 
-                        folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
-                                      tooltip=station_data[Config.STATION_NAME_COL],
-                                      popup=folium.Popup(popup_html)).add_to(m)
-                    
-                    folium.LayerControl().add_to(m)
-                    folium_static(m, height=600, width="100%") # Aumento de altura para renderizado
-                else:
-                    st.warning(f"No se encontró información geográfica para la estación {station_to_show}.")
-
-    with temporal_tab:
-        st.subheader("Explorador Anual de Precipitación")
-        df_anual_melted_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
-        
-        if not df_anual_melted_non_na.empty:
-            all_years_int = sorted(df_anual_melted_non_na[Config.YEAR_COL].unique())
-            controls_col, map_col = st.columns([1, 3])
-            
-            with controls_col:
-                st.markdown("##### Opciones de Visualización")
-                selected_base_map_config, selected_overlays_config = display_map_controls(st,
-                                                                                         "temporal")
-                selected_year = st.slider('Seleccione un Año para Explorar', min_value=min(all_years_int),
-                                          max_value=max(all_years_int), value=min(all_years_int),
-                                          key="temporal_year_slider")
-
-                st.markdown(f"#### Resumen del Año: {selected_year}")
-                df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
-                                                          == selected_year]
-
-                # Resumen de datos en la columna de control
-                if not df_year_filtered.empty:
-                    st.metric("Estaciones con Datos", len(df_year_filtered))
-                    st.metric("Promedio Anual", f"{df_year_filtered[Config.PRECIPITATION_COL].mean():.0f} mm")
-                    st.metric("Máximo Anual", f"{df_year_filtered[Config.PRECIPITATION_COL].max():.0f} mm")
-
-            with map_col:
-                m_temporal = create_folium_map([4.57, -74.29], 5, selected_base_map_config,
-                                              selected_overlays_config)
-                
-                df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
-                                                          == selected_year]
-
-                if not df_year_filtered.empty:
-                    df_map_data = pd.merge(
-                        df_year_filtered,
-                        gdf_filtered[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
-                                      Config.LONGITUDE_COL, 'geometry']].drop_duplicates(),
-                        on=Config.STATION_NAME_COL,
-                        how="inner"
-                    )
-
-                    if not df_map_data.empty:
-                        min_val, max_val = df_anual_melted_non_na[Config.PRECIPITATION_COL].min(), \
-                                           df_anual_melted_non_na[Config.PRECIPITATION_COL].max()
-                        if min_val >= max_val: max_val = min_val + 1
-                        
-                        # Usar Viridis de Matplotlib (Compatible universalmente)
-                        colormap = cm.LinearColormap(
-                            colors=mpl_cm.get_cmap('viridis').colors,
-                            vmin=min_val,
-                            vmax=max_val
-                        )
-
-                        for _, row in df_map_data.iterrows():
-                            # Reutilización del popup:
-                            popup_html = generate_station_popup_html(row, df_anual_melted)
-                            
-                            # Usamos la geometría de GeoDataFrame para ubicación precisa del marcador
-                            folium.CircleMarker(
-                                location=[row['geometry'].y, row['geometry'].x],
-                                radius=5,
-                                color=colormap(row[Config.PRECIPITATION_COL]),
-                                fill=True,
-                                fill_color=colormap(row[Config.PRECIPITATION_COL]),
-                                fill_opacity=0.8,
-                                tooltip=row[Config.STATION_NAME_COL],
-                                popup=folium.Popup(popup_html)
-                            ).add_to(m_temporal)
-
-                        temp_gdf = gpd.GeoDataFrame(df_map_data, geometry='geometry',
-                                                    crs=gdf_filtered.crs)
-
-                        if not temp_gdf.empty:
-                            bounds = temp_gdf.total_bounds
-                            if np.all(np.isfinite(bounds)):
-                                m_temporal.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
-                        
-                        folium.LayerControl().add_to(m_temporal)
-                        folium_static(m_temporal, height=700, width="100%")
-                    else:
-                        st.warning("No hay datos de estaciones válidos para el año seleccionado en el mapa.")
-                else:
-                    st.info("No hay datos para el año seleccionado.")
-        else:
-            st.warning("No hay datos anuales para la visualización temporal.")
-
-    with race_tab:
-        st.subheader("Ranking Anual de Precipitación por Estación")
-        if not df_anual_melted.empty:
-            df_anual_melted_sorted = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
-            
-            fig_racing = px.bar(
-                df_anual_melted_sorted, x=Config.PRECIPITATION_COL, y=Config.STATION_NAME_COL,
-                animation_frame=Config.YEAR_COL, orientation='h',
-                labels={Config.PRECIPITATION_COL: 'Precipitación Anual (mm)',
-                        Config.STATION_NAME_COL: 'Estación'},
-                title=f"Evolución de Precipitación Anual por Estación ({st.session_state.year_range[0]} - {st.session_state.year_range[1]})"
-            )
-
-            fig_racing.update_traces(texttemplate='%{x:.0f}', textposition='outside')
-            
-            # Ajuste del rango del eje X (Asegurar límite superior explícito)
-            max_val_plot = df_anual_melted[Config.PRECIPITATION_COL].max()
-            x_range = [0, max_val_plot * 1.15 if max_val_plot > 0 else 100]
-
-            fig_racing.update_layout(
-                xaxis_range=x_range,
-                height=max(600, len(stations_for_analysis) * 35),
-                title_font_size=20, font_size=12,
-                yaxis=dict(categoryorder='total ascending')
-            )
-            
-            if fig_racing.layout.sliders:
-                fig_racing.layout.sliders[0]['currentvalue']['font']['size'] = 24
-                fig_racing.layout.sliders[0]['currentvalue']['prefix'] = '<b>Año: </b>'
-            
-            if fig_racing.layout.updatemenus:
-                fig_racing.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 800
-                fig_racing.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 500
-
-            st.plotly_chart(fig_racing, use_container_width=True)
-        else:
-            st.warning("No hay datos anuales para el gráfico de carrera.")
-
-    with anim_tab:
-        st.subheader("Mapa Animado de Precipitación Anual")
         selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
             else f"1 estación: {stations_for_analysis[0]}"
         st.info(f"Mostrando análisis para {selected_stations_str} en el período "
-            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+                f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+        
+        tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
+                     "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
+        gif_tab, mapa_interactivo_tab, temporal_tab, race_tab, anim_tab, compare_tab, kriging_tab = \
+            st.tabs(tab_names)
 
-        if not df_anual_melted.empty:
-            all_years = sorted(df_anual_melted[Config.YEAR_COL].unique())
-            if all_years:
-                all_selected_stations_info = \
-                    gdf_filtered.drop_duplicates(subset=[Config.STATION_NAME_COL])
-                
-                # Crear grid completo de estaciones y años para asegurar todos los frames
-                full_grid = pd.MultiIndex.from_product([all_selected_stations_info[Config.STATION_NAME_COL], all_years],
-                                                       names=[Config.STATION_NAME_COL,
-                                                              Config.YEAR_COL]).to_frame(index=False)
-                
-                full_grid = pd.merge(full_grid, all_selected_stations_info[['geometry',
-                                                                            Config.LATITUDE_COL, Config.LONGITUDE_COL,
-                                                                            Config.STATION_NAME_COL]].drop_duplicates(),
-                                     on=Config.STATION_NAME_COL)
-                
-                df_anim_complete = pd.merge(full_grid, df_anual_melted[[Config.STATION_NAME_COL,
-                                                                        Config.YEAR_COL, Config.PRECIPITATION_COL]],
-                                            on=[Config.STATION_NAME_COL,
-                                                Config.YEAR_COL], how='left')
-
-                df_anim_complete['texto_tooltip'] = df_anim_complete.apply(lambda row:
-                                                                           f"<b>Estación:</b> {row[Config.STATION_NAME_COL]}<br><b>Precipitación:</b> {row[Config.PRECIPITATION_COL]:.0f} mm"
-                                                                           if pd.notna(row[Config.PRECIPITATION_COL]) else f"<b>Estación:</b> {row[Config.STATION_NAME_COL]}<br><b>Precipitación:</b> Sin datos",
-                                                                           axis=1)
-
-                df_anim_complete['precipitacion_plot'] = \
-                    df_anim_complete[Config.PRECIPITATION_COL].fillna(0)
-                
-                min_precip_anim, max_precip_anim = \
-                    df_anual_melted[Config.PRECIPITATION_COL].min(), \
-                    df_anual_melted[Config.PRECIPITATION_COL].max()
-                
-                # ELIMINAR COLUMNA GEOMETRY ANTES DE PLOTLY (para evitar TypeError)
-                df_anim_plot = df_anim_complete.drop(columns=['geometry']).copy()
-                
-                # Usando YlGnBu (paleta corregida de Plotly)
-                fig_mapa_animado = px.scatter_geo(df_anim_plot,
-                                                  lat=df_anim_plot[Config.LATITUDE_COL],
-                                                  lon=df_anim_plot[Config.LONGITUDE_COL],
-                                                  color='precipitacion_plot', size='precipitacion_plot',
-                                                  hover_name=Config.STATION_NAME_COL,
-                                                  hover_data={'precipitacion_plot': False,
-                                                              'texto_tooltip': True},
-                                                  animation_frame=Config.YEAR_COL,
-                                                  projection='natural earth',
-                                                  title=f'Precipitación Anual por Estación ({st.session_state.year_range[0]} - {st.session_state.year_range[1]})',
-                                                  color_continuous_scale=px.colors.sequential.YlGnBu,
-                                                  range_color=[min_precip_anim, max_precip_anim])
-
-                fig_mapa_animado.update_traces(hovertemplate='%{customdata[0]}')
-                fig_mapa_animado.update_geos(fitbounds="locations", visible=True,
-                                             showcoastlines=True, coastlinewidth=0.5, showland=True,
-                                             landcolor="rgb(243, 243, 243)",
-                                             showocean=True, oceancolor="rgb(220, 235, 255)", showcountries=True,
-                                             countrywidth=0.5)
-
-                fig_mapa_animado.update_layout(height=700,
-                                               sliders=[dict(currentvalue=dict(font=dict(size=24, color="#707070"),
-                                                                              prefix='<b>Año: </b>',
-                                                                              visible=True))])
-                st.plotly_chart(fig_mapa_animado, use_container_width=True)
-            else:
-                st.warning("No hay años disponibles en los datos anuales.")
-
-    with compare_tab:
-        st.subheader("Comparación de Mapas Anuales")
-        df_anual_melted_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
-
-        if not stations_for_analysis:
-            st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
-        elif not df_anual_melted_non_na.empty and \
-                len(df_anual_melted_non_na[Config.YEAR_COL].unique()) > 0:
+        with gif_tab:
+            st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
             
-            control_col, map_col1, map_col2 = st.columns([1, 2, 2])
-            
-            with control_col:
-                st.markdown("##### Controles de Mapa")
-                selected_base_map_config, selected_overlays_config = display_map_controls(st,
-                                                                                         "compare")
-                min_year, max_year = int(df_anual_melted_non_na[Config.YEAR_COL].min()), \
-                                     int(df_anual_melted_non_na[Config.YEAR_COL].max())
+            if os.path.exists(Config.GIF_PATH):
+                col_controls, col_gif = st.columns([1, 3])
                 
-                year1 = st.slider("Seleccione el año para el Mapa 1", min_year, max_year, max_year,
-                                  key="compare_year1")
-                year2 = st.slider("Seleccione el año para el Mapa 2", min_year, max_year, max_year - 1 if
-                                  max_year > min_year else max_year, key="compare_year2")
-                
-                min_precip_comp, max_precip_comp = \
-                    int(df_anual_melted_non_na[Config.PRECIPITATION_COL].min()), \
-                    int(df_anual_melted_non_na[Config.PRECIPITATION_COL].max())
-                
-                if min_precip_comp >= max_precip_comp:
-                    max_precip_comp = min_precip_comp + 1
-
-                color_range_comp = st.slider("Rango de Escala de Color (mm)", min_precip_comp,
-                                             max_precip_comp, (min_precip_comp, max_precip_comp),
-                                             key="color_comp")
-
-            data_year1 = df_anual_melted[df_anual_melted[Config.YEAR_COL] == year1]
-            data_year2 = df_anual_melted[df_anual_melted[Config.YEAR_COL] == year2]
-
-            # Usar Viridis de Matplotlib (Compatible universalmente)
-            colormap = cm.LinearColormap(
-                colors=mpl_cm.get_cmap('viridis').colors,
-                vmin=color_range_comp[0],
-                vmax=color_range_comp[1]
-            )
-
-            def create_compare_map(data, year, col, gdf_stations_info):
-                col.markdown(f"**Precipitación en {year}**")
-                m = create_folium_map([6.24, -75.58], 6, selected_base_map_config,
-                                      selected_overlays_config)
-
-                if not data.empty:
-                    data_with_geom = pd.merge(data, gdf_stations_info, on=Config.STATION_NAME_COL)
+                with col_controls:
+                    # Botón de reinicio que incrementa la clave para forzar la recarga
+                    if st.button("🔄 Reiniciar Animación"):
+                        st.session_state['gif_reload_key'] += 1
+                        st.rerun()
                     
-                    # Convertir a GeoDataFrame para usar total_bounds
-                    gpd_data = gpd.GeoDataFrame(
-                        data_with_geom, geometry='geometry', crs=gdf_stations_info.crs
-                    )
+                with col_gif:
+                    try:
+                        # Volvemos a la implementación original más compatible
+                        with open(Config.GIF_PATH, "rb") as file:
+                            contents = file.read()
+                        data_url = base64.b64encode(contents).decode("utf-8")
+                        
+                        st.markdown(
+                            f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
+                            f'style="width:70%; max-width: 600px;" '
+                            f'key="gif_display_{st.session_state["gif_reload_key"]}">',
+                            unsafe_allow_html=True
+                        )
+                        
+                    except Exception as e:
+                        st.warning(f"Error al cargar/mostrar GIF: {e}")
 
-                    for _, row in gpd_data.iterrows():
-                        if pd.notna(row[Config.PRECIPITATION_COL]):
-                            # Reutilización del popup:
-                            popup_html = generate_station_popup_html(row, df_anual_melted)
-                            
-                            folium.CircleMarker(
-                                location=[row['geometry'].y, row['geometry'].x], radius=5,
-                                color=colormap(row[Config.PRECIPITATION_COL]),
-                                fill=True, fill_color=colormap(row[Config.PRECIPITATION_COL]), fill_opacity=0.8,
-                                tooltip=row[Config.STATION_NAME_COL],
-                                popup=folium.Popup(popup_html)
-                            ).add_to(m)
+            else:
+                st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
 
-                    if not gpd_data.empty:
-                        bounds = gpd_data.total_bounds
-                        if np.all(np.isfinite(bounds)):
-                            m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+        with mapa_interactivo_tab:
+            st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
+            station_to_show = st.selectbox("Seleccione la estación a visualizar:",
+                                           options=sorted(stations_for_analysis), key="station_map_select")
+            
+            if station_to_show:
+                controls_col, map_col = st.columns([1, 3])
+                with controls_col:
+                    st.subheader("Controles del Mapa")
+                    selected_base_map_config, selected_overlays_config = display_map_controls(st,
+                                                                                             "avanzado_estaciones")
+                with map_col:
+                    station_data_list = gdf_filtered[gdf_filtered[Config.STATION_NAME_COL] ==
+                                                      station_to_show]
+                    if not station_data_list.empty:
+                        station_data = station_data_list.iloc[0]
+                        # Aumento de zoom para centrar en la estación
+                        m = create_folium_map(
+                            location=[station_data['geometry'].y, station_data['geometry'].x],
+                            zoom=10, # Aumentar el zoom para mejor visualización
+                            base_map_config=selected_base_map_config,
+                            overlays_config=selected_overlays_config
+                        )
+                        
+                        df_station_monthly_avg = \
+                            df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] ==
+                                                  station_to_show]
+                        
+                        # Generar el mini-gráfico y popup
+                        if not df_station_monthly_avg.empty:
+                            # Reutilizar la lógica del popup, indicando que incluya el gráfico
+                            popup_html = generate_station_popup_html(station_data, df_anual_melted,
+                                                                     include_chart=True, df_monthly_filtered=df_monthly_filtered)
+                            folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
+                                          popup=folium.Popup(popup_html, max_width=400)).add_to(m)
+                        else:
+                            # Popup básico
+                            popup_html = generate_station_popup_html(station_data, df_anual_melted) 
+                            folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
+                                          tooltip=station_data[Config.STATION_NAME_COL],
+                                          popup=folium.Popup(popup_html)).add_to(m)
+                        
+                        folium.LayerControl().add_to(m)
+                        folium_static(m, height=600, width="100%") # Aumento de altura para renderizado
+                    else:
+                        st.warning(f"No se encontró información geográfica para la estación {station_to_show}.")
+
+        with temporal_tab:
+            st.subheader("Explorador Anual de Precipitación")
+            df_anual_melted_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
+            
+            if not df_anual_melted_non_na.empty:
+                all_years_int = sorted(df_anual_melted_non_na[Config.YEAR_COL].unique())
+                controls_col, map_col = st.columns([1, 3])
                 
-                folium.LayerControl().add_to(m)
-                with col:
-                    folium_static(m, height=450, width="100%") # Ajuste de altura
+                with controls_col:
+                    st.markdown("##### Opciones de Visualización")
+                    selected_base_map_config, selected_overlays_config = display_map_controls(st,
+                                                                                             "temporal")
+                    selected_year = st.slider('Seleccione un Año para Explorar', min_value=min(all_years_int),
+                                              max_value=max(all_years_int), value=min(all_years_int),
+                                              key="temporal_year_slider")
 
-            gdf_stations_geometries = gdf_filtered[[Config.STATION_NAME_COL,
-                                                    'geometry']].drop_duplicates()
-            create_compare_map(data_year1, year1, map_col1, gdf_stations_geometries)
-            create_compare_map(data_year2, year2, map_col2, gdf_stations_geometries)
-        else:
-            st.warning("No hay años disponibles para la comparación.")
+                    st.markdown(f"#### Resumen del Año: {selected_year}")
+                    df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
+                                                              == selected_year]
 
-    with kriging_tab:
-        st.subheader("Comparación de Superficies de Interpolación Anual")
-        df_anual_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
+                    # Resumen de datos en la columna de control
+                    if not df_year_filtered.empty:
+                        st.metric("Estaciones con Datos", len(df_year_filtered))
+                        st.metric("Promedio Anual", f"{df_year_filtered[Config.PRECIPITATION_COL].mean():.0f} mm")
+                        st.metric("Máximo Anual", f"{df_year_filtered[Config.PRECIPITATION_COL].max():.0f} mm")
 
-        if not stations_for_analysis:
-            st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
-        elif df_anual_non_na.empty or len(df_anual_non_na[Config.YEAR_COL].unique()) == 0:
-            st.warning("No hay suficientes datos anuales para realizar la interpolación.")
-        else:
-            min_year, max_year = int(df_anual_non_na[Config.YEAR_COL].min()), \
-                                 int(df_anual_non_na[Config.YEAR_COL].max())
-            
-            control_col, display_col = st.columns([1, 2])
-            
-            with control_col:
-                st.markdown("##### Controles de los Mapas")
-                st.markdown("**Mapa 1**")
-                year1 = st.slider("Seleccione el año", min_year, max_year, max_year, key="interp_year1")
-                method1 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
-                                                                         "Spline (Thin Plate)"], key="interp_method1")
-                variogram_model1 = None
-                if method1 == "Kriging Ordinario":
-                    variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
-                    variogram_model1 = st.selectbox("Modelo de Variograma para Mapa 1", variogram_options, key="var_model_1")
+                with map_col:
+                    m_temporal = create_folium_map([4.57, -74.29], 5, selected_base_map_config,
+                                                  selected_overlays_config)
+                    
+                    df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
+                                                              == selected_year]
 
-                st.markdown("---")
-                st.markdown("**Mapa 2**")
-                year2 = st.slider("Seleccione el año", min_year, max_year, max_year - 1 if max_year >
-                                  min_year else max_year, key="interp_year2")
-                method2 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
-                                                                         "Spline (Thin Plate)"], index=1, key="interp_method2")
-                variogram_model2 = None
-                if method2 == "Kriging Ordinario":
-                    variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
-                    variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
+                    if not df_year_filtered.empty:
+                        df_map_data = pd.merge(
+                            df_year_filtered,
+                            gdf_filtered[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
+                                          Config.LONGITUDE_COL, 'geometry']].drop_duplicates(),
+                            on=Config.STATION_NAME_COL,
+                            how="inner"
+                        )
 
-            def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map):
-                data_year_with_geom = pd.merge(
-                    df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
-                    gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
-                                      Config.LONGITUDE_COL]].drop_duplicates(),
-                    on=Config.STATION_NAME_COL
+                        if not df_map_data.empty:
+                            min_val, max_val = df_anual_melted_non_na[Config.PRECIPITATION_COL].min(), \
+                                               df_anual_melted_non_na[Config.PRECIPITATION_COL].max()
+                            if min_val >= max_val: max_val = min_val + 1
+                            
+                            # Usar Viridis de Matplotlib (Compatible universalmente)
+                            colormap = cm.LinearColormap(
+                                colors=mpl_cm.get_cmap('viridis').colors,
+                                vmin=min_val,
+                                vmax=max_val
+                            )
+
+                            for _, row in df_map_data.iterrows():
+                                # Reutilización del popup:
+                                popup_html = generate_station_popup_html(row, df_anual_melted)
+                                
+                                # Usamos la geometría de GeoDataFrame para ubicación precisa del marcador
+                                folium.CircleMarker(
+                                    location=[row['geometry'].y, row['geometry'].x],
+                                    radius=5,
+                                    color=colormap(row[Config.PRECIPITATION_COL]),
+                                    fill=True,
+                                    fill_color=colormap(row[Config.PRECIPITATION_COL]),
+                                    fill_opacity=0.8,
+                                    tooltip=row[Config.STATION_NAME_COL],
+                                    popup=folium.Popup(popup_html)
+                                ).add_to(m_temporal)
+
+                            temp_gdf = gpd.GeoDataFrame(df_map_data, geometry='geometry',
+                                                        crs=gdf_filtered.crs)
+
+                            if not temp_gdf.empty:
+                                bounds = temp_gdf.total_bounds
+                                if np.all(np.isfinite(bounds)):
+                                    m_temporal.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+                            
+                            folium.LayerControl().add_to(m_temporal)
+                            folium_static(m_temporal, height=700, width="100%")
+                        else:
+                            st.warning("No hay datos de estaciones válidos para el año seleccionado en el mapa.")
+                    else:
+                        st.info("No hay datos para el año seleccionado.")
+            else:
+                st.warning("No hay datos anuales para la visualización temporal.")
+
+        with race_tab:
+            st.subheader("Ranking Anual de Precipitación por Estación")
+            if not df_anual_melted.empty:
+                df_anual_melted_sorted = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
+                
+                fig_racing = px.bar(
+                    df_anual_melted_sorted, x=Config.PRECIPITATION_COL, y=Config.STATION_NAME_COL,
+                    animation_frame=Config.YEAR_COL, orientation='h',
+                    labels={Config.PRECIPITATION_COL: 'Precipitación Anual (mm)',
+                            Config.STATION_NAME_COL: 'Estación'},
+                    title=f"Evolución de Precipitación Anual por Estación ({st.session_state.year_range[0]} - {st.session_state.year_range[1]})"
+                )
+
+                fig_racing.update_traces(texttemplate='%{x:.0f}', textposition='outside')
+                
+                # Ajuste del rango del eje X (Asegurar límite superior explícito)
+                max_val_plot = df_anual_melted[Config.PRECIPITATION_COL].max()
+                x_range = [0, max_val_plot * 1.15 if max_val_plot > 0 else 100]
+
+                fig_racing.update_layout(
+                    xaxis_range=x_range,
+                    height=max(600, len(stations_for_analysis) * 35),
+                    title_font_size=20, font_size=12,
+                    yaxis=dict(categoryorder='total ascending')
                 )
                 
-                if len(data_year_with_geom) < 4:
-                    fig = go.Figure()
-                    fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
-                                      xaxis_visible=False, yaxis_visible=False)
-                    return fig, None
+                if fig_racing.layout.sliders:
+                    fig_racing.layout.sliders[0]['currentvalue']['font']['size'] = 24
+                    fig_racing.layout.sliders[0]['currentvalue']['prefix'] = '<b>Año: </b>'
                 
-                lons = data_year_with_geom[Config.LONGITUDE_COL].values
-                lats = data_year_with_geom[Config.LATITUDE_COL].values
-                vals = data_year_with_geom[Config.PRECIPITATION_COL]
+                if fig_racing.layout.updatemenus:
+                    fig_racing.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 800
+                    fig_racing.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 500
+
+                st.plotly_chart(fig_racing, use_container_width=True)
+            else:
+                st.warning("No hay datos anuales para el gráfico de carrera.")
+
+        with anim_tab:
+            st.subheader("Mapa Animado de Precipitación Anual")
+            selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
+                else f"1 estación: {stations_for_analysis[0]}"
+            st.info(f"Mostrando análisis para {selected_stations_str} en el período "
+                f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+
+            if not df_anual_melted.empty:
+                all_years = sorted(df_anual_melted[Config.YEAR_COL].unique())
+                if all_years:
+                    all_selected_stations_info = \
+                        gdf_filtered.drop_duplicates(subset=[Config.STATION_NAME_COL])
+                    
+                    # Crear grid completo de estaciones y años para asegurar todos los frames
+                    full_grid = pd.MultiIndex.from_product([all_selected_stations_info[Config.STATION_NAME_COL], all_years],
+                                                           names=[Config.STATION_NAME_COL,
+                                                                  Config.YEAR_COL]).to_frame(index=False)
+                    
+                    full_grid = pd.merge(full_grid, all_selected_stations_info[['geometry',
+                                                                                Config.LATITUDE_COL, Config.LONGITUDE_COL,
+                                                                                Config.STATION_NAME_COL]].drop_duplicates(),
+                                         on=Config.STATION_NAME_COL)
+                    
+                    df_anim_complete = pd.merge(full_grid, df_anual_melted[[Config.STATION_NAME_COL,
+                                                                            Config.YEAR_COL, Config.PRECIPITATION_COL]],
+                                                on=[Config.STATION_NAME_COL,
+                                                    Config.YEAR_COL], how='left')
+
+                    df_anim_complete['texto_tooltip'] = df_anim_complete.apply(lambda row:
+                                                                               f"<b>Estación:</b> {row[Config.STATION_NAME_COL]}<br><b>Precipitación:</b> {row[Config.PRECIPITATION_COL]:.0f} mm"
+                                                                               if pd.notna(row[Config.PRECIPITATION_COL]) else f"<b>Estación:</b> {row[Config.STATION_NAME_COL]}<br><b>Precipitación:</b> Sin datos",
+                                                                               axis=1)
+
+                    df_anim_complete['precipitacion_plot'] = \
+                        df_anim_complete[Config.PRECIPITATION_COL].fillna(0)
+                    
+                    min_precip_anim, max_precip_anim = \
+                        df_anual_melted[Config.PRECIPITATION_COL].min(), \
+                        df_anual_melted[Config.PRECIPITATION_COL].max()
+                    
+                    # ELIMINAR COLUMNA GEOMETRY ANTES DE PLOTLY (para evitar TypeError)
+                    df_anim_plot = df_anim_complete.drop(columns=['geometry']).copy()
+                    
+                    # Usando YlGnBu (paleta corregida de Plotly)
+                    fig_mapa_animado = px.scatter_geo(df_anim_plot,
+                                                      lat=df_anim_plot[Config.LATITUDE_COL],
+                                                      lon=df_anim_plot[Config.LONGITUDE_COL],
+                                                      color='precipitacion_plot', size='precipitacion_plot',
+                                                      hover_name=Config.STATION_NAME_COL,
+                                                      hover_data={'precipitacion_plot': False,
+                                                                  'texto_tooltip': True},
+                                                      animation_frame=Config.YEAR_COL,
+                                                      projection='natural earth',
+                                                      title=f'Precipitación Anual por Estación ({st.session_state.year_range[0]} - {st.session_state.year_range[1]})',
+                                                      color_continuous_scale=px.colors.sequential.YlGnBu,
+                                                      range_color=[min_precip_anim, max_precip_anim])
+
+                    fig_mapa_animado.update_traces(hovertemplate='%{customdata[0]}')
+                    fig_mapa_animado.update_geos(fitbounds="locations", visible=True,
+                                                 showcoastlines=True, coastlinewidth=0.5, showland=True,
+                                                 landcolor="rgb(243, 243, 243)",
+                                                 showocean=True, oceancolor="rgb(220, 235, 255)", showcountries=True,
+                                                 countrywidth=0.5)
+
+                    fig_mapa_animado.update_layout(height=700,
+                                                   sliders=[dict(currentvalue=dict(font=dict(size=24, color="#707070"),
+                                                                                  prefix='<b>Año: </b>',
+                                                                                  visible=True))])
+                    st.plotly_chart(fig_mapa_animado, use_container_width=True)
+                else:
+                    st.warning("No hay años disponibles en los datos anuales.")
+
+        with compare_tab:
+            st.subheader("Comparación de Mapas Anuales")
+            df_anual_melted_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
+
+            if not stations_for_analysis:
+                st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
+            elif not df_anual_melted_non_na.empty and \
+                    len(df_anual_melted_non_na[Config.YEAR_COL].unique()) > 0:
                 
-                bounds = gdf_filtered_map.total_bounds
-                grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
-                grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
-                z_grid = None
-                fig_variogram = None
+                control_col, map_col1, map_col2 = st.columns([1, 2, 2])
                 
-                try:
-                    if method == "Kriging Ordinario":
-                        ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
-                                             verbose=False, enable_plotting=False)
-                        z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
+                with control_col:
+                    st.markdown("##### Controles de Mapa")
+                    selected_base_map_config, selected_overlays_config = display_map_controls(st,
+                                                                                             "compare")
+                    min_year, max_year = int(df_anual_melted_non_na[Config.YEAR_COL].min()), \
+                                         int(df_anual_melted_non_na[Config.YEAR_COL].max())
+                    
+                    year1 = st.slider("Seleccione el año para el Mapa 1", min_year, max_year, max_year,
+                                      key="compare_year1")
+                    year2 = st.slider("Seleccione el año para el Mapa 2", min_year, max_year, max_year - 1 if
+                                      max_year > min_year else max_year, key="compare_year2")
+                    
+                    min_precip_comp, max_precip_comp = \
+                        int(df_anual_melted_non_na[Config.PRECIPITATION_COL].min()), \
+                        int(df_anual_melted_non_na[Config.PRECIPITATION_COL].max())
+                    
+                    if min_precip_comp >= max_precip_comp:
+                        max_precip_comp = min_precip_comp + 1
+
+                    color_range_comp = st.slider("Rango de Escala de Color (mm)", min_precip_comp,
+                                                 max_precip_comp, (min_precip_comp, max_precip_comp),
+                                                 key="color_comp")
+
+                data_year1 = df_anual_melted[df_anual_melted[Config.YEAR_COL] == year1]
+                data_year2 = df_anual_melted[df_anual_melted[Config.YEAR_COL] == year2]
+
+                # Usar Viridis de Matplotlib (Compatible universalmente)
+                colormap = cm.LinearColormap(
+                    colors=mpl_cm.get_cmap('viridis').colors,
+                    vmin=color_range_comp[0],
+                    vmax=color_range_comp[1]
+                )
+
+                def create_compare_map(data, year, col, gdf_stations_info):
+                    col.markdown(f"**Precipitación en {year}**")
+                    m = create_folium_map([6.24, -75.58], 6, selected_base_map_config,
+                                          selected_overlays_config)
+
+                    if not data.empty:
+                        data_with_geom = pd.merge(data, gdf_stations_info, on=Config.STATION_NAME_COL)
                         
-                        fig_variogram = ok.display_variogram_model()
-                    elif method == "IDW":
-                        z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
-                    elif method == "Spline (Thin Plate)":
-                        rbf = Rbf(lons, lats, vals.values, function='thin_plate')
-                        z_grid_raw = rbf(grid_lon, grid_lat)
-                        z_grid = z_grid_raw.T 
-                except Exception as e:
-                    st.error(f"Error al calcular {method} para el año {year}: {e}")
-                    return go.Figure().update_layout(title=f"Error en {method} para {year}"), None
+                        # Convertir a GeoDataFrame para usar total_bounds
+                        gpd_data = gpd.GeoDataFrame(
+                            data_with_geom, geometry='geometry', crs=gdf_stations_info.crs
+                        )
 
-                if z_grid is not None:
-                    fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
-                                                    colorscale=px.colors.sequential.YlGnBu,
-                                                    contours=dict(showlabels=True,
-                                                                  labelfont=dict(size=10, color='white'),
-                                                                  labelformat=".0f"
-                                                                  )))
+                        for _, row in gpd_data.iterrows():
+                            if pd.notna(row[Config.PRECIPITATION_COL]):
+                                # Reutilización del popup:
+                                popup_html = generate_station_popup_html(row, df_anual_melted)
+                                
+                                folium.CircleMarker(
+                                    location=[row['geometry'].y, row['geometry'].x], radius=5,
+                                    color=colormap(row[Config.PRECIPITATION_COL]),
+                                    fill=True, fill_color=colormap(row[Config.PRECIPITATION_COL]), fill_opacity=0.8,
+                                    tooltip=row[Config.STATION_NAME_COL],
+                                    popup=folium.Popup(popup_html)
+                                ).add_to(m)
+
+                        if not gpd_data.empty:
+                            bounds = gpd_data.total_bounds
+                            if np.all(np.isfinite(bounds)):
+                                m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
                     
-                    fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
-                                             y=data_year_with_geom[Config.LATITUDE_COL],
-                                             mode='markers', marker=dict(color='red', size=5), name='Estaciones',
-                                             text=data_year_with_geom.apply(lambda row:
-                                                                        f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
-                                             hoverinfo='text'))
-                    
-                    fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
-                    return fig, fig_variogram
+                    folium.LayerControl().add_to(m)
+                    with col:
+                        folium_static(m, height=450, width="100%") # Ajuste de altura
+
+                gdf_stations_geometries = gdf_filtered[[Config.STATION_NAME_COL,
+                                                        'geometry']].drop_duplicates()
+                create_compare_map(data_year1, year1, map_col1, gdf_stations_geometries)
+                create_compare_map(data_year2, year2, map_col2, gdf_stations_geometries)
+            else:
+                st.warning("No hay años disponibles para la comparación.")
+
+        with kriging_tab:
+            st.subheader("Comparación de Superficies de Interpolación Anual")
+            df_anual_non_na = df_anual_melted.dropna(subset=[Config.PRECIPITATION_COL])
+
+            if not stations_for_analysis:
+                st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
+            elif df_anual_non_na.empty or len(df_anual_non_na[Config.YEAR_COL].unique()) == 0:
+                st.warning("No hay suficientes datos anuales para realizar la interpolación.")
+            else:
+                min_year, max_year = int(df_anual_non_na[Config.YEAR_COL].min()), \
+                                     int(df_anual_non_na[Config.YEAR_COL].max())
                 
-                return go.Figure().update_layout(title="Error: Método no implementado"), None
-            
-            # Here we render the maps first, and then the variograms.
-            # This is the new rendering logic that will solve the layout issue.
-            
-            # Generate the data for both maps
-            fig1, fig_var1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
-            fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
+                control_col, display_col = st.columns([1, 2])
+                
+                with control_col:
+                    st.markdown("##### Controles de los Mapas")
+                    st.markdown("**Mapa 1**")
+                    year1 = st.slider("Seleccione el año", min_year, max_year, max_year, key="interp_year1")
+                    method1 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
+                                                                             "Spline (Thin Plate)"], key="interp_method1")
+                    variogram_model1 = None
+                    if method1 == "Kriging Ordinario":
+                        variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
+                        variogram_model1 = st.selectbox("Modelo de Variograma para Mapa 1", variogram_options, key="var_model_1")
 
-            # Map section
-            with display_col:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if fig1:
+                    st.markdown("---")
+                    st.markdown("**Mapa 2**")
+                    year2 = st.slider("Seleccione el año", min_year, max_year, max_year - 1 if max_year >
+                                      min_year else max_year, key="interp_year2")
+                    method2 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
+                                                                             "Spline (Thin Plate)"], index=1, key="interp_method2")
+                    variogram_model2 = None
+                    if method2 == "Kriging Ordinario":
+                        variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
+                        variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
+
+                def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map):
+                    data_year_with_geom = pd.merge(
+                        df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
+                        gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
+                                          Config.LONGITUDE_COL]].drop_duplicates(),
+                        on=Config.STATION_NAME_COL
+                    )
+                    
+                    if len(data_year_with_geom) < 4:
+                        fig = go.Figure()
+                        fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
+                                          xaxis_visible=False, yaxis_visible=False)
+                        return fig, None
+                    
+                    lons = data_year_with_geom[Config.LONGITUDE_COL].values
+                    lats = data_year_with_geom[Config.LATITUDE_COL].values
+                    vals = data_year_with_geom[Config.PRECIPITATION_COL]
+                    
+                    bounds = gdf_filtered_map.total_bounds
+                    grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
+                    grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
+                    z_grid = None
+                    fig_variogram = None
+                    
+                    try:
+                        if method == "Kriging Ordinario":
+                            ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
+                                                 verbose=False, enable_plotting=False)
+                            z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
+                            
+                            # CÓDIGO CORREGIDO PARA EL VARIOGRAMA
+                            # Se crea una figura explícita y se usa plt.gcf() para obtenerla
+                            fig_variogram = plt.figure()
+                            ok.display_variogram_model()
+                            plt.close(fig_variogram)
+                        elif method == "IDW":
+                            z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
+                        elif method == "Spline (Thin Plate)":
+                            rbf = Rbf(lons, lats, vals.values, function='thin_plate')
+                            z_grid_raw = rbf(grid_lon, grid_lat)
+                            z_grid = z_grid_raw.T 
+                    except Exception as e:
+                        st.error(f"Error al calcular {method} para el año {year}: {e}")
+                        return go.Figure().update_layout(title=f"Error en {method} para {year}"), None
+
+                    if z_grid is not None:
+                        fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
+                                                        colorscale=px.colors.sequential.YlGnBu,
+                                                        contours=dict(showlabels=True,
+                                                                      labelfont=dict(size=10, color='white'),
+                                                                      labelformat=".0f"
+                                                                      )))
+                        
+                        fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
+                                                 y=data_year_with_geom[Config.LATITUDE_COL],
+                                                 mode='markers', marker=dict(color='red', size=5), name='Estaciones',
+                                                 text=data_year_with_geom.apply(lambda row:
+                                                                            f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
+                                                 hoverinfo='text'))
+                        
+                        fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
+                        return fig, fig_variogram
+                    
+                    return go.Figure().update_layout(title="Error: Método no implementado"), None
+                
+                # Renderiza el contenido en la columna de visualización
+                with display_col:
+                    # Mapas
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        fig1, fig_var1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
                         st.plotly_chart(fig1, use_container_width=True)
-                    else:
-                        st.info(f"El mapa 1 no se pudo generar para el año {year1} con el método {method1}.")
-
-                with col2:
-                    if fig2:
+                    with col2:
+                        fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                         st.plotly_chart(fig2, use_container_width=True)
-                    else:
-                        st.info(f"El mapa 2 no se pudo generar para el año {year2} con el método {method2}.")
-
-                st.markdown("---")
-                st.markdown("##### Variogramas de los Mapas")
-                col3, col4 = st.columns(2)
-                
-                # Variogram 1
-                with col3:
-                    if fig_var1:
-                        st.pyplot(fig_var1)
-                        buf = io.BytesIO()
-                        fig_var1.savefig(buf, format="png")
-                        st.download_button(
-                            label="Descargar Variograma 1 (PNG)",
-                            data=buf.getvalue(),
-                            file_name=f"variograma_1_{year1}_{method1}_{variogram_model1}.png",
-                            mime="image/png"
-                        )
-                        plt.close(fig_var1)
-                    else:
-                        st.info("El variograma no está disponible para este método o no hay suficientes datos.")
-                
-                # Variogram 2
-                with col4:
-                    if fig_var2:
-                        st.pyplot(fig_var2)
-                        buf = io.BytesIO()
-                        fig_var2.savefig(buf, format="png")
-                        st.download_button(
-                            label="Descargar Variograma 2 (PNG)",
-                            data=buf.getvalue(),
-                            file_name=f"variograma_2_{year2}_{method2}_{variogram_model2}.png",
-                            mime="image/png"
-                        )
-                        plt.close(fig_var2)
-                    else:
-                        st.info("El variograma no está disponible para este método o no hay suficientes datos.")
+                        
+                    # Variogramas
+                    st.markdown("---")
+                    st.markdown("##### Variogramas de los Mapas")
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        if fig_var1:
+                            st.pyplot(fig_var1)
+                            buf = io.BytesIO()
+                            fig_var1.savefig(buf, format="png")
+                            st.download_button(
+                                label="Descargar Variograma 1 (PNG)",
+                                data=buf.getvalue(),
+                                file_name=f"variograma_1_{year1}_{method1}_{variogram_model1}.png",
+                                mime="image/png"
+                            )
+                            plt.close(fig_var1)
+                        else:
+                            st.info("El variograma no está disponible para este método o no hay suficientes datos.")
+                    
+                    with col4:
+                        if fig_var2:
+                            st.pyplot(fig_var2)
+                            buf = io.BytesIO()
+                            fig_var2.savefig(buf, format="png")
+                            st.download_button(
+                                label="Descargar Variograma 2 (PNG)",
+                                data=buf.getvalue(),
+                                file_name=f"variograma_2_{year2}_{method2}_{variogram_model2}.png",
+                                mime="image/png"
+                            )
+                            plt.close(fig_var2)
+                        else:
+                            st.info("El variograma no está disponible para este método o no hay suficientes datos.")
                     
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
