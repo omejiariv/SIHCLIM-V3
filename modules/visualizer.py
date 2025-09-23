@@ -11,7 +11,6 @@ from streamlit_folium import folium_static
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-import io
 import os
 import base64
 import branca.colormap as cm
@@ -21,7 +20,8 @@ from scipy import stats
 from scipy.interpolate import Rbf 
 import pymannkendall as mk
 from prophet.plot import plot_plotly
-import matplotlib.pyplot as plt # Importado para la visualización de variogramas
+import matplotlib.pyplot as plt
+import io
 
 # --- Importaciones de Módulos Propios (Refactorizados) ---
 from modules.config import Config
@@ -469,7 +469,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                                      labels={Config.STATION_NAME_COL: 'Estación', Config.PRECIPITATION_COL: 'Precipitación Media Anual (mm)'},
                                      color=Config.PRECIPITATION_COL,
                                      color_continuous_scale=px.colors.sequential.Blues_r)
-                    
                     fig_avg.update_layout(height=600,
                                          xaxis={'categoryorder': 'total descending' if "Mayor a Menor" in sort_order
                                                 else ('total ascending' if "Menor a Mayor" in sort_order else 'trace')})
@@ -923,7 +922,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
             
             # Ajuste del rango del eje X (Asegurar límite superior explícito)
             max_val_plot = df_anual_melted[Config.PRECIPITATION_COL].max()
-            # This line ensures the x-axis scale is fixed for all frames, preventing erratic jumps.
             x_range = [0, max_val_plot * 1.15 if max_val_plot > 0 else 100]
 
             fig_racing.update_layout(
@@ -950,7 +948,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
         selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
             else f"1 estación: {stations_for_analysis[0]}"
         st.info(f"Mostrando análisis para {selected_stations_str} en el período "
-                f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
 
         if not df_anual_melted.empty:
             all_years = sorted(df_anual_melted[Config.YEAR_COL].unique())
@@ -1200,17 +1198,26 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 
                 return go.Figure().update_layout(title="Error: Método no implementado"), None
             
-            # This is the new rendering logic that will solve the layout issue.
-            with display_col:
-                # ----- MAPA 1 -----
-                col1, col2 = st.columns(2)
-                with col1:
-                    with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
-                        fig1, fig_var1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
-                        st.plotly_chart(fig1, use_container_width=True)
-                with col2:
-                    st.markdown("##### Variograma del Mapa 1")
+            map_col1, map_col2 = st.columns(2)
+
+            with map_col1:
+                with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
+                    fig1, fig_var1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
+                    st.plotly_chart(fig1, use_container_width=True)
+            
+            with map_col2:
+                with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
+                    fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
+                    st.plotly_chart(fig2, use_container_width=True)
+
+            with st.container():
+                st.markdown("---")
+                st.subheader("Variogramas de los Mapas")
+                col_var1, col_var2 = st.columns(2)
+                
+                with col_var1:
                     if fig_var1:
+                        st.markdown("##### Variograma del Mapa 1")
                         st.pyplot(fig_var1)
                         buf = io.BytesIO()
                         fig_var1.savefig(buf, format="png")
@@ -1224,15 +1231,9 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     else:
                         st.info("El variograma no está disponible para este método o no hay suficientes datos.")
                 
-                # ----- MAPA 2 -----
-                col3, col4 = st.columns(2)
-                with col3:
-                    with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
-                        fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
-                        st.plotly_chart(fig2, use_container_width=True)
-                with col4:
-                    st.markdown("##### Variograma del Mapa 2")
+                with col_var2:
                     if fig_var2:
+                        st.markdown("##### Variograma del Mapa 2")
                         st.pyplot(fig_var2)
                         buf = io.BytesIO()
                         fig_var2.savefig(buf, format="png")
