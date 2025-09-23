@@ -51,12 +51,8 @@ def load_csv_data(file_uploader_object, sep=';', lower_case=True):
     encodings_to_try = ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']
     for encoding in encodings_to_try:
         try:
-            # NOTA: El separador ';' debe manejarse después de la lectura
             df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=encoding)
             
-            # CORRECCIÓN DE SINTAXIS: Limpieza robusta de columnas
-            # 1. Limpia espacios en blanco. 
-            # 2. Reemplaza el separador extra (;) que pudo haber quedado en el nombre de columna.
             df.columns = df.columns.str.strip().str.replace(';', '', regex=False)
             
             if lower_case:
@@ -90,7 +86,6 @@ def load_shapefile(file_uploader_object):
             gdf.columns = gdf.columns.str.strip().str.lower()
             
             if gdf.crs is None:
-                # Asumiendo el CRS más común para Colombia si no está definido
                 gdf.set_crs("EPSG:9377", inplace=True)
 
             return gdf.to_crs("EPSG:4326")
@@ -108,7 +103,6 @@ def complete_series(_df):
     for i, station in enumerate(station_list):
         df_station = _df[_df[Config.STATION_NAME_COL] == station].copy()
         
-        # Procesamiento de índices y resampling
         df_station[Config.DATE_COL] = pd.to_datetime(df_station[Config.DATE_COL])
         df_station.set_index(Config.DATE_COL, inplace=True)
         
@@ -118,11 +112,9 @@ def complete_series(_df):
         date_range = pd.date_range(start=df_station.index.min(), end=df_station.index.max(), freq='MS')
         df_resampled = df_station.reindex(date_range)
         
-        # Interpolación
         df_resampled[Config.PRECIPITATION_COL] = \
             df_resampled[Config.PRECIPITATION_COL].interpolate(method='time')
         
-        # Rellenar metadatos
         df_resampled[Config.ORIGIN_COL] = df_resampled[Config.ORIGIN_COL].fillna('Completado')
         df_resampled[Config.STATION_NAME_COL] = station
         df_resampled[Config.YEAR_COL] = df_resampled.index.year
@@ -237,7 +229,7 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
     
     #--- 3. Extraer datos ENSO para gráficos aislados
     enso_cols = ['id', Config.DATE_COL, Config.ENSO_ONI_COL, 'temp_sst', 'temp_media']
-    existing_enso_cols = [col for col in enso_cols if col in df_precip_raw.columns]
+    existing_enso_cols = [col for col in df_precip_raw.columns if col in enso_cols]
     
     df_enso = df_precip_raw[existing_enso_cols].drop_duplicates().copy()
     
@@ -271,13 +263,12 @@ def interpolate_idw(lons, lats, vals, grid_lon, grid_lat, power=2):
             if total_weight > 0:
                 grid_z[j, i] = weighted_sum / total_weight
             else:
-                grid_z[j, i] = np.nan # O un valor por defecto
-    return grid_z.T #Transponer para que coincida con la orientación de plotly
+                grid_z[j, i] = np.nan
+    return grid_z.T
 
 def interpolate_rbf_spline(lons, lats, vals, grid_lon, grid_lat, function='thin_plate'):
     """Realiza una interpolación usando Radial Basis Function (Spline)."""
     grid_x, grid_y = np.meshgrid(grid_lon, grid_lat)
-    # FIX: La función 'thin_plate' es aceptada por la librería. Aseguramos su nombre.
     rbf = Rbf(lons, lats, vals, function=function)
     z = rbf(grid_x, grid_y)
-    return z.T # Transponer para que coincida con la orientación de plotly
+    return z.T
