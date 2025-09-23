@@ -1167,10 +1167,16 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # NEW, MORE ROBUST VARIOGRAM VISUALIZATION
+                        # CORRECTED AND ROBUST VARIOGRAM VISUALIZATION
                         st.markdown("##### Variograma del Mapa")
-                        fig_variogram = ok.display_variogram_model() # This method returns a matplotlib figure object
+                        
+                        # Create a figure to avoid the deprecation warning
+                        fig_variogram, ax = plt.subplots(1, 1)
+                        # The `display_variogram_model` method returns a Matplotlib Figure, so we can display it directly
+                        fig_variogram = ok.display_variogram_model()
                         st.pyplot(fig_variogram)
+                        
+                        # Create a download button for the plot
                         buf = io.BytesIO()
                         fig_variogram.savefig(buf, format="png")
                         st.download_button(
@@ -1179,7 +1185,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                             file_name=f"variograma_{year}_{variogram_model}.png",
                             mime="image/png"
                         )
-                        plt.close(fig_variogram) # Always close the figure to prevent warnings
+                        plt.close(fig_variogram) # Always close the figure
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
