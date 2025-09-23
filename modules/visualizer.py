@@ -1151,7 +1151,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
-                    return fig
+                    return fig, None, None
                 
                 lons = data_year_with_geom[Config.LONGITUDE_COL].values
                 lats = data_year_with_geom[Config.LATITUDE_COL].values
@@ -1161,29 +1161,14 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
                 grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
                 z_grid = None
+                fig_variogram = None
                 
                 try:
                     if method == "Kriging Ordinario":
                         ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
-                        
-                        # CORRECCIÓN PARA EVITAR EL AttributeError: 'NoneType'
-                        plt.figure() # Crea una nueva figura global
-                        ok.display_variogram_model() # Dibuja en la figura actual
-                        fig_variogram = plt.gcf() # Obtiene la figura actual
-                        
-                        st.markdown("##### Variograma del Mapa")
-                        st.pyplot(fig_variogram)
-                        buf = io.BytesIO()
-                        fig_variogram.savefig(buf, format="png")
-                        st.download_button(
-                            label="Descargar Variograma (PNG)",
-                            data=buf.getvalue(),
-                            file_name=f"variograma_{year}_{variogram_model}.png",
-                            mime="image/png"
-                        )
-                        plt.close(fig_variogram) # Cierra la figura para evitar warnings
+                        fig_variogram = ok.display_variogram_model()
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
@@ -1192,7 +1177,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         z_grid = z_grid_raw.T 
                 except Exception as e:
                     st.error(f"Error al calcular {method} para el año {year}: {e}")
-                    return go.Figure().update_layout(title=f"Error en {method} para {year}")
+                    return go.Figure().update_layout(title=f"Error en {method} para {year}"), None, None
 
                 if z_grid is not None:
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
@@ -1210,20 +1195,53 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              hoverinfo='text'))
                     
                     fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
-                    return fig
+                    return fig, fig_variogram, (method, year, variogram_model)
                 
-                return go.Figure().update_layout(title="Error: Método no implementado")
+                return go.Figure().update_layout(title="Error: Método no implementado"), None, None
 
             # Llamadas a la función de interpolación con el nuevo argumento
-            with map_col1:
-                with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
-                    fig1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
-                    st.plotly_chart(fig1, use_container_width=True)
+            col_mapa1, col_mapa2 = st.columns(2)
+            col_variograma1, col_variograma2 = st.columns(2)
 
-            with map_col2:
+            # Mapa 1
+            with col_mapa1:
+                with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
+                    fig1, fig_var1, meta1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
+                    st.plotly_chart(fig1, use_container_width=True)
+            
+            with col_variograma1:
+                if fig_var1 is not None:
+                    st.markdown("##### Variograma del Mapa")
+                    st.pyplot(fig_var1)
+                    buf = io.BytesIO()
+                    fig_var1.savefig(buf, format="png")
+                    st.download_button(
+                        label="Descargar Variograma (PNG)",
+                        data=buf.getvalue(),
+                        file_name=f"variograma_{meta1[1]}_{meta1[0]}_{meta1[2]}.png",
+                        mime="image/png"
+                    )
+                    plt.close(fig_var1)
+
+            # Mapa 2
+            with col_mapa2:
                 with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
-                    fig2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
+                    fig2, fig_var2, meta2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
+            
+            with col_variograma2:
+                if fig_var2 is not None:
+                    st.markdown("##### Variograma del Mapa")
+                    st.pyplot(fig_var2)
+                    buf = io.BytesIO()
+                    fig_var2.savefig(buf, format="png")
+                    st.download_button(
+                        label="Descargar Variograma (PNG)",
+                        data=buf.getvalue(),
+                        file_name=f"variograma_{meta2[1]}_{meta2[0]}_{meta2[2]}.png",
+                        mime="image/png"
+                    )
+                    plt.close(fig_var2)
                     
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
