@@ -1247,7 +1247,6 @@ def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
                                                options=sorted(st.session_state.get('filtered_station_options', [])),
                                                key="percentile_station_select")
         if station_to_analyze_perc:
-            # LLAMA A LA FUNCIÓN DE VISUALIZACIÓN DE PERCENTILES
             display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc)
 
     with spi_sub_tab:
@@ -1273,7 +1272,6 @@ def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
                     st.warning(f"No hay suficientes datos ({len(precip_series.dropna())} meses) para calcular el SPI-{spi_window}.")
             else:
                 with st.spinner(f"Calculando SPI-{spi_window}..."):
-                    # LLAMADA AL MÓDULO ANALYSIS
                     df_station_spi['spi'] = calculate_spi(precip_series, spi_window)
                 
                 df_plot = df_station_spi.dropna(subset=['spi']).copy()
@@ -1317,7 +1315,6 @@ def display_anomalies_tab(df_long, df_monthly_filtered, stations_for_analysis):
         st.warning("No se puede realizar el análisis de anomalías. El DataFrame base no está disponible.")
         return
 
-    # LLAMADA AL MÓDULO ANALYSIS PARA CALCULAR ANOMALÍAS
     df_anomalias = calculate_monthly_anomalies(df_monthly_filtered, df_long)
 
     if st.session_state.get('exclude_na', False):
@@ -1886,7 +1883,6 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
         else:
             with st.spinner(f"Entrenando modelo y generando pronóstico para {station_to_forecast} con SARIMA{sarima_order}x{seasonal_order[:-1]}..."):
                 try:
-                    # LLAMADA AL MÓDULO FORECASTING
                     ts_data_hist, forecast_mean, forecast_ci, sarima_df_export = \
                         generate_sarima_forecast(ts_data_sarima, sarima_order, seasonal_order, forecast_horizon)
 
@@ -1947,7 +1943,6 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
         else:
             with st.spinner(f"Entrenando modelo Prophet y generando pronóstico para {station_to_forecast_prophet}..."):
                 try:
-                    # LLAMADA AL MÓDULO FORECASTING
                     model_prophet, forecast_prophet = \
                         generate_prophet_forecast(ts_data_prophet_raw, forecast_horizon_prophet)
                         
@@ -2241,7 +2236,6 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
                 df_station.set_index(Config.DATE_COL, inplace=True)
                 
                 try:
-                    # LLAMADA AL MÓDULO FORECASTING
                     result = get_decomposition_results(df_station[Config.PRECIPITATION_COL], period=12, model='additive')
                     
                     fig_decomp = go.Figure()
@@ -2294,7 +2288,6 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
 
                 if len(df_station_acf) > max_lag:
                     try:
-                        # LLAMADA AL MÓDULO FORECASTING
                         fig_acf = create_acf_chart(df_station_acf[Config.PRECIPITATION_COL], max_lag)
                         st.plotly_chart(fig_acf, use_container_width=True)
                         
@@ -2332,7 +2325,6 @@ def display_downloads_tab(df_anual_melted, df_monthly_filtered, stations_for_ana
     if st.session_state.analysis_mode == "Completar series (interpolación)":
         st.markdown("**Datos de Precipitación Mensual (Series Completadas y Filtradas)**")
         
-        # Corrección del SyntaxError: se asegura que la expresión de filtrado esté correctamente cerrada
         df_completed_to_download = (st.session_state.df_monthly_processed[
             (st.session_state.df_monthly_processed[Config.STATION_NAME_COL].isin(stations_for_analysis)) &
             (st.session_state.df_monthly_processed[Config.DATE_COL].dt.year >=
@@ -2359,14 +2351,12 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
     if gdf_filtered.empty:
         st.info("No hay estaciones que cumplan con los filtros geográficos y de datos seleccionados.")
-        return # Si no hay estaciones, no continuamos.
+        return 
 
-    # Prepara la tabla base con la información geográfica
     df_info_table = gdf_filtered[[Config.STATION_NAME_COL, Config.ALTITUDE_COL,
                                   Config.MUNICIPALITY_COL, Config.REGION_COL,
                                   Config.PERCENTAGE_COL]].copy()
 
-    # Calcula y une la precipitación media anual si hay datos anuales disponibles
     if not df_anual_melted.empty:
         df_mean_precip = \
             df_anual_melted.groupby(Config.STATION_NAME_COL)[Config.PRECIPITATION_COL].mean().round(0).reset_index()
@@ -2374,11 +2364,8 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
         df_info_table = df_info_table.merge(df_mean_precip, on=Config.STATION_NAME_COL,
                                             how='left')
     else:
-        # Si no hay datos anuales, añade la columna con un valor indicativo
         df_info_table['Precipitación media anual (mm)'] = 'N/A'
 
-    # CORRECCIÓN DE SINTAXIS (Versión robusta con asignación a variable temporal)
-    # Resuelve el error de la línea 2326: set_index(Config.STATION_NAME_COL)
     df_for_display = (
         df_info_table
         .drop(columns=[Config.PERCENTAGE_COL])
@@ -2393,8 +2380,6 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
     Realiza y muestra el análisis de sequías y eventos extremos por percentiles
     mensuales para una estación.
     """
-    # Necesitamos el DataFrame completo (df_long) para calcular los percentiles
-    # sobre todo el periodo histórico (climatología), no solo el periodo filtrado.
     df_long = st.session_state.get('df_long')
     
     if df_long is None or df_long.empty:
@@ -2408,15 +2393,12 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
     
     st.markdown("---")
 
-    # CORRECCIÓN DE SINTAXIS: Se elimina el paréntesis extra después de 'st.spinner(...)'
     with st.spinner(f"Calculando percentiles {p_lower} y {p_upper} para {station_to_analyze_perc}...") :
         try:
-            # LLAMADA AL MÓDULO ANALYSIS
             df_extremes, df_thresholds = calculate_percentiles_and_extremes(
                 df_long, station_to_analyze_perc, p_lower, p_upper
             )
             
-            # Aplicar el filtro de rango de años y meses de la sesión actual a los resultados
             df_plot = df_extremes[
                 (df_extremes[Config.DATE_COL].dt.year >= st.session_state.year_range[0]) &
                 (df_extremes[Config.DATE_COL].dt.year <= st.session_state.year_range[1]) &
@@ -2427,7 +2409,6 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
                 st.warning("No hay datos que coincidan con los filtros de tiempo para la estación seleccionada.")
                 return
 
-            # --- Gráfico 1: Serie de Tiempo con Eventos Marcados
             st.subheader(f"Serie de Tiempo con Eventos Extremos ({p_lower} y {p_upper} Percentiles)")
             
             color_map = {'Sequía Extrema (< P{}%)'.format(p_lower): 'red', 
@@ -2442,15 +2423,12 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
                                              Config.DATE_COL: "Fecha"},
                                      hover_data={'event_type': True, 'p_lower': ':.0f', 'p_upper': ':.0f'})
             
-            # Añadir las líneas de umbral (pueden ser promedio mensual si se desea)
-            # Simplificaremos el umbral como una línea horizontal de la media histórica general
             mean_precip = df_long[Config.PRECIPITATION_COL].mean()
             fig_series.add_hline(y=mean_precip, line_dash="dash", line_color="green", annotation_text="Media Histórica")
 
             fig_series.update_layout(height=500)
             st.plotly_chart(fig_series, use_container_width=True)
 
-            # --- Gráfico 2: Umbrales Mensuales (Climatología)
             st.subheader("Umbrales de Percentil Mensual (Climatología Histórica)")
             
             meses_map_inv = {1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun', 
