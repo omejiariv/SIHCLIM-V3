@@ -1,11 +1,11 @@
-# modules/utils.py (Código completo y corregido)
+# modules/utils.py
 
 import streamlit as st
 import io
 import plotly.graph_objects as go 
 import folium 
-import pandas as pd # <--- ¡IMPORTACIÓN FALTANTE!
-import numpy as np # Necesario para algunas utilidades futuras
+import pandas as pd
+import numpy as np
 
 # --- NUEVA FUNCIÓN PARA CORRECCIÓN NUMÉRICA ---
 @st.cache_data
@@ -14,10 +14,7 @@ def standardize_numeric_column(series):
     Convierte una serie de Pandas a valores numéricos de manera robusta,
     reemplazando comas por puntos como separador decimal.
     """
-    # 1. Asegurar string y reemplazar comas por puntos (problema común de CSV latinos)
     series_clean = series.astype(str).str.replace(',', '.', regex=False)
-    
-    # 2. Convertir a numérico, forzando errores a NaN
     return pd.to_numeric(series_clean, errors='coerce')
 
 
@@ -40,7 +37,6 @@ def display_plotly_download_buttons(fig, file_prefix):
 
     with col2:
         try:
-            # Asegúrate de tener kaleido instalado: pip install kaleido
             img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
             st.download_button(
                 label="Descargar Gráfico (PNG)",
