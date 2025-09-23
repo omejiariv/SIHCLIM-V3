@@ -1153,6 +1153,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     
                     return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
 
+                # Renderiza los controles en la columna de visualización
                 control_col, map_col1, map_col2 = st.columns([1, 2, 2])
                 
                 with control_col:
@@ -1177,9 +1178,11 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
                         variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
 
+                # Generación de mapas y variogramas
                 fig1, fig_var1, error1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
                 fig2, fig_var2, error2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
                 
+                # Renderiza el contenido en la columna de visualización
                 with map_col1:
                     if fig1:
                         st.plotly_chart(fig1, use_container_width=True)
