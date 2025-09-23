@@ -1180,7 +1180,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
                 # Generación de mapas y variogramas
                 fig1, fig_var1, error1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
-                fig2, fig_var2, error2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
+                fig2, fig_var2, error2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
                 
                 # Renderiza el contenido en la columna de visualización
                 with display_col:
