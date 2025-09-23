@@ -109,6 +109,9 @@ def calculate_spei(precip_series, et_series, scale):
     Returns:
         pd.Series: Serie de tiempo con los valores del SPEI.
     """
+    # Nos aseguramos de que la escala sea un número entero antes de usarla.
+    scale = int(scale)
+
     # 1. Asegurarse de que los índices coincidan
     data = pd.DataFrame({'precip': precip_series, 'et': et_series}).dropna()
 
