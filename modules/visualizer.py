@@ -1168,6 +1168,8 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
+                        
+                        # CORRECTED: Returns the figure object
                         fig_variogram = ok.display_variogram_model()
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
@@ -1199,46 +1201,48 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 
                 return go.Figure().update_layout(title="Error: Método no implementado"), None, None
 
-            # Llamadas a la función de interpolación con el nuevo argumento
-            col_mapa1, col_mapa2 = st.columns(2)
-            col_variograma1, col_variograma2 = st.columns(2)
+            # RENDER THE MAPS AND VARIOGRAMS
+            # We'll use Streamlit columns to display elements side-by-side
+            
+            map_col, variogram_col = st.columns(2)
 
-            # Mapa 1
-            with col_mapa1:
+            # ----- MAPA 1 -----
+            with map_col:
                 with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
                     fig1, fig_var1, meta1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
                     st.plotly_chart(fig1, use_container_width=True)
             
-            with col_variograma1:
-                if fig_var1 is not None:
-                    st.markdown("##### Variograma del Mapa")
+            if fig_var1 is not None:
+                with variogram_col:
+                    st.markdown("##### Variograma del Mapa 1")
                     st.pyplot(fig_var1)
                     buf = io.BytesIO()
                     fig_var1.savefig(buf, format="png")
                     st.download_button(
-                        label="Descargar Variograma (PNG)",
+                        label="Descargar Variograma 1 (PNG)",
                         data=buf.getvalue(),
-                        file_name=f"variograma_{meta1[1]}_{meta1[0]}_{meta1[2]}.png",
+                        file_name=f"variograma_1_{meta1[1]}_{meta1[0]}_{meta1[2]}.png",
                         mime="image/png"
                     )
                     plt.close(fig_var1)
-
-            # Mapa 2
-            with col_mapa2:
+            
+            # ----- MAPA 2 -----
+            map_col, variogram_col = st.columns(2)
+            with map_col:
                 with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
                     fig2, fig_var2, meta2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
             
-            with col_variograma2:
-                if fig_var2 is not None:
-                    st.markdown("##### Variograma del Mapa")
+            if fig_var2 is not None:
+                with variogram_col:
+                    st.markdown("##### Variograma del Mapa 2")
                     st.pyplot(fig_var2)
                     buf = io.BytesIO()
                     fig_var2.savefig(buf, format="png")
                     st.download_button(
-                        label="Descargar Variograma (PNG)",
+                        label="Descargar Variograma 2 (PNG)",
                         data=buf.getvalue(),
-                        file_name=f"variograma_{meta2[1]}_{meta2[0]}_{meta2[2]}.png",
+                        file_name=f"variograma_2_{meta2[1]}_{meta2[0]}_{meta2[2]}.png",
                         mime="image/png"
                     )
                     plt.close(fig_var2)
