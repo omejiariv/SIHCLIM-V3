@@ -316,7 +316,7 @@ def main():
         with tabs[4]:
             display_anomalies_tab(st.session_state.df_long, df_monthly_filtered, stations_for_analysis)
         with tabs[5]:
-            display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis)
+            display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for_analysis)
         with tabs[6]:
             display_stats_tab(st.session_state.df_long, df_anual_melted, df_monthly_filtered,
                               stations_for_analysis)
