@@ -1,4 +1,4 @@
-# app.py (Función main() corregida)
+# app.py (Función main() corregida y completa)
 
 # -*- coding: utf-8 -*-
 
@@ -75,7 +75,6 @@ def main():
         if not st.session_state.get('data_loaded', False) and all([uploaded_file_mapa,
                                                                    uploaded_file_precip, uploaded_zip_shapefile]):
             with st.spinner("Procesando archivos y cargando datos..."):
-                # Llama a la función centralizada de data_processor.py
                 gdf_stations, gdf_municipios, df_long, df_enso = load_and_process_all_data(
                     uploaded_file_mapa, uploaded_file_precip, uploaded_zip_shapefile)
 
@@ -95,13 +94,12 @@ def main():
             for key in keys_to_clear:
                 del st.session_state[key]
             st.rerun()
-    # ----------------------------------------------------
     
     # --------------------------------------------------------------------------
     # LÓGICA PRINCIPAL: Solo se ejecuta si los datos ya han sido cargados
     # --------------------------------------------------------------------------
-    if st.session_state.get('data_loaded', False):
-
+    if st.session_state.get('data_loaded', False) and st.session_state.get('df_long') is not None:
+        
         # --- FUNCIÓN DE FILTRADO (Se mantiene aquí por acoplamiento con Streamlit Session State)
         def apply_filters_to_stations(df, min_perc, altitudes, regions, municipios, celdas):
             stations_filtered = df.copy()
