@@ -74,10 +74,12 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         df_station_monthly_avg = \
             df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
         
+        # Corrección: Verificar si el DataFrame del mini-gráfico no está vacío.
         if not df_station_monthly_avg.empty:
             df_monthly_avg = \
                 df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
 
+            # Asegurar que el DataFrame resultante para el gráfico no esté vacío
             if not df_monthly_avg.empty:
                 fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL],
                                              y=df_monthly_avg[Config.PRECIPITATION_COL])])
@@ -1035,7 +1037,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 data_year1 = df_anual_melted[df_anual_melted[Config.YEAR_COL] == year1]
                 data_year2 = df_anual_melted[df_anual_melted[Config.YEAR_COL] == year2]
 
-                # Usar Viridis de Matplotlib (Compatible universalmente)
                 colormap = cm.LinearColormap(
                     colors=mpl_cm.get_cmap('viridis').colors,
                     vmin=color_range_comp[0],
@@ -1050,14 +1051,12 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     if not data.empty:
                         data_with_geom = pd.merge(data, gdf_stations_info, on=Config.STATION_NAME_COL)
                         
-                        # Convertir a GeoDataFrame para usar total_bounds
                         gpd_data = gpd.GeoDataFrame(
                             data_with_geom, geometry='geometry', crs=gdf_stations_info.crs
                         )
 
                         for _, row in gpd_data.iterrows():
                             if pd.notna(row[Config.PRECIPITATION_COL]):
-                                # Reutilización del popup:
                                 popup_html = generate_station_popup_html(row, df_anual_melted)
                                 
                                 folium.CircleMarker(
@@ -1075,7 +1074,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     
                     folium.LayerControl().add_to(m)
                     with col:
-                        folium_static(m, height=450, width="100%") # Ajuste de altura
+                        folium_static(m, height=450, width="100%") 
 
                 gdf_stations_geometries = gdf_filtered[[Config.STATION_NAME_COL,
                                                         'geometry']].drop_duplicates()
@@ -1096,7 +1095,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 min_year, max_year = int(df_anual_non_na[Config.YEAR_COL].min()), \
                                      int(df_anual_non_na[Config.YEAR_COL].max())
                 
-                # Definición de la función de generación de datos
                 def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map):
                     data_year_with_geom = pd.merge(
                         df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
@@ -1160,7 +1158,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
 
                 # Layout para los controles
-                control_col, display_col = st.columns([1, 2])
+                control_col, map_col1, map_col2 = st.columns([1, 2, 2])
                 
                 with control_col:
                     st.markdown("##### Controles de los Mapas")
