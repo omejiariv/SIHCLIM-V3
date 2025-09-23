@@ -1167,10 +1167,9 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # CORRECCIÓN: Llamada a display_variogram_model sin el argumento 'ax'
-                        fig_variogram = ok.display_variogram_model()
-                        
+                        # NEW, MORE ROBUST VARIOGRAM VISUALIZATION
                         st.markdown("##### Variograma del Mapa")
+                        fig_variogram = ok.display_variogram_model() # This method returns a matplotlib figure object
                         st.pyplot(fig_variogram)
                         buf = io.BytesIO()
                         fig_variogram.savefig(buf, format="png")
@@ -1180,7 +1179,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                             file_name=f"variograma_{year}_{variogram_model}.png",
                             mime="image/png"
                         )
-                        plt.close(fig_variogram)
+                        plt.close(fig_variogram) # Always close the figure to prevent warnings
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
