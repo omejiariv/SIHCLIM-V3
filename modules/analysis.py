@@ -89,3 +89,40 @@ def calculate_percentiles_and_extremes(df_long, station_name, p_lower=10, p_uppe
     df_station_extremes.loc[is_wet, 'event_type'] = f'Húmedo Extremo (> P{p_upper}%)'
 
     return df_station_extremes.dropna(subset=[Config.PRECIPITATION_COL]), df_thresholds
+
+import spei
+from scipy.stats import gamma, norm
+
+# ... (aquí van tus funciones existentes como calculate_spi, etc.)
+
+def calculate_spei(precip_series, temp_series, lat, scale):
+    """
+    Calcula el Índice Estandarizado de Precipitación-Evapotranspiración (SPEI).
+
+    Args:
+        precip_series (pd.Series): Serie de tiempo de precipitación mensual.
+        temp_series (pd.Series): Serie de tiempo de temperatura media mensual.
+        lat (float): Latitud de la estación en grados decimales.
+        scale (int): Escala de tiempo en meses para el cálculo (e.g., 3, 6, 12).
+
+    Returns:
+        pd.Series: Serie de tiempo con los valores del SPEI.
+    """
+    # 1. Asegurarse de que los índices coincidan
+    data = pd.DataFrame({'precip': precip_series, 'temp': temp_series}).dropna()
+
+    if data.empty:
+        return pd.Series(dtype=float)
+
+    # 2. Calcular la Evapotranspiración Potencial (PET) con el método de Thornthwaite
+    # El método requiere la temperatura media mensual y la latitud.
+    pet = spei.thornthwaite(data['temp'], lat)
+
+    # 3. Calcular la diferencia entre Precipitación y PET (Balance Hídrico)
+    water_balance = data['precip'] - pet
+
+    # 4. Calcular el SPEI usando una distribución Log-Logística
+    # Esta es la distribución recomendada para el SPEI.
+    spei_values = spei.spei(water_balance, scale, dist=spei.Distribution.log_logistic)
+
+    return spei_values
