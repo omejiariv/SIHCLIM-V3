@@ -1131,34 +1131,24 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 method2 = st.selectbox("Método de interpolación", options=["Kriging Ordinario", "IDW",
                                                                          "Spline (Thin Plate)"], index=1, key="interp_method2")
 
-            def generate_interpolation_map(year, method, gdf_filtered_map):
+            def generate_interpolation_map(year, method, variogram_model, gdf_filtered_map):
                 data_year_with_geom = pd.merge(
                     df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
-                    # Aseguramos la columna de geometría para Folium/GeoPandas y las coordenadas numéricas
                     gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
                                       Config.LONGITUDE_COL]].drop_duplicates(),
                     on=Config.STATION_NAME_COL
                 )
                 
-                # Para la unión posterior con GeoDataFrame, necesitamos la columna 'geometry'
-                # La volvemos a crear usando las coordenadas LAT/LON que se usaron para el merge,
-                # ya que data_year_with_geom perdió la columna 'geometry' en la selección inicial
-                data_year_with_geom_geo = gpd.GeoDataFrame(data_year_with_geom, 
-                                                            geometry=gpd.points_from_xy(data_year_with_geom[Config.LONGITUDE_COL], data_year_with_geom[Config.LATITUDE_COL]),
-                                                            crs="EPSG:4326")
-
-                if len(data_year_with_geom_geo) < 4:
+                if len(data_year_with_geom) < 4:
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
                     return fig
                 
-                # Usamos las columnas numéricas LAT/LON del DataFrame mergeado para la interpolación
                 lons = data_year_with_geom[Config.LONGITUDE_COL].values
                 lats = data_year_with_geom[Config.LATITUDE_COL].values
                 vals = data_year_with_geom[Config.PRECIPITATION_COL]
                 
-                # Obtenemos los límites de toda la selección filtrada (GeoDataFrame) para consistencia.
                 bounds = gdf_filtered_map.total_bounds
                 grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
                 grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
@@ -1166,13 +1156,12 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 
                 try:
                     if method == "Kriging Ordinario":
-                        ok = OrdinaryKriging(lons, lats, vals.values, variogram_model='linear',
+                        ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
-                        # Usamos la función Rbf de scipy
                         rbf = Rbf(lons, lats, vals.values, function='thin_plate')
                         z_grid_raw = rbf(grid_lon, grid_lat)
                         z_grid = z_grid_raw.T 
@@ -1181,13 +1170,11 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     return go.Figure().update_layout(title=f"Error en {method} para {year}")
 
                 if z_grid is not None:
-                    # Corregimos la paleta de colores a un estándar de Plotly.
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
                                                     colorscale=px.colors.sequential.YlGnBu,
                                                     contours=dict(showlabels=True,
                                                                   labelfont=dict(size=10, color='white'))))
                     
-                    # Usamos las columnas numéricas para Plotly Scatter (tooltips)
                     fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
                                              y=data_year_with_geom[Config.LATITUDE_COL],
                                              mode='markers', marker=dict(color='red', size=5), name='Estaciones',
@@ -1195,19 +1182,26 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                                                         f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
                                              hoverinfo='text'))
                     
-                    fig.update_layout(title=f"Precipitación en {year} ({method})", height=600)
+                    fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
                     return fig
                 
                 return go.Figure().update_layout(title="Error: Método no implementado")
 
+            # Ahora necesitamos pasar el modelo de variograma como un argumento
+            variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
+            variogram_model1 = st.selectbox("Modelo de Variograma para Mapa 1", variogram_options, key="var_model_1")
+            
+            # Llamadas a la función de interpolación con el nuevo argumento
             with map_col1:
-                with st.spinner(f"Generando mapa 1 ({year1}, {method1})..."):
-                    fig1 = generate_interpolation_map(year1, method1, gdf_filtered)
+                with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
+                    fig1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
                     st.plotly_chart(fig1, use_container_width=True)
 
+            variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
+
             with map_col2:
-                with st.spinner(f"Generando mapa 2 ({year2}, {method2})..."):
-                    fig2 = generate_interpolation_map(year2, method2, gdf_filtered)
+                with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
+                    fig2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
 
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
