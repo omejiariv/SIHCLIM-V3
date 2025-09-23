@@ -14,7 +14,7 @@ import numpy as np
 import os
 import base64
 import branca.colormap as cm
-import matplotlib.cm as mpl_cm
+import matplotlib.cm as mpl_cm 
 from pykrige.ok import OrdinaryKriging
 from scipy import stats
 from scipy.interpolate import Rbf 
@@ -74,12 +74,10 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         df_station_monthly_avg = \
             df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
         
-        # Corrección: Verificar si el DataFrame del mini-gráfico no está vacío.
         if not df_station_monthly_avg.empty:
             df_monthly_avg = \
                 df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
 
-            # Asegurar que el DataFrame resultante para el gráfico no esté vacío
             if not df_monthly_avg.empty:
                 fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL],
                                              y=df_monthly_avg[Config.PRECIPITATION_COL])])
@@ -301,8 +299,7 @@ def display_spatial_distribution_tab(gdf_filtered, stations_for_analysis, df_anu
                             bounds = gdf_display.total_bounds
                             if np.all(np.isfinite(bounds)):
                                 center_lat = (bounds[1] + bounds[3]) / 2
-                                center_lon = (bounds[0] +
-                                              bounds[2]) / 2
+                                center_lon = (bounds[0] + bounds[2]) / 2
                                 st.session_state.map_view = {"location": [center_lat, center_lon], "zoom": 9}
                 st.markdown("---")
 
@@ -722,100 +719,95 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
             df_regional_avg.rename(columns={'Precipitación Promedio': 'Precipitación Promedio Regional (mm)'}, inplace=True)
             st.dataframe(df_regional_avg.round(1), use_container_width=True)
 
-    with display_advanced_maps_tab:
-        st.header("Mapas Avanzados")
-        if not stations_for_analysis:
-            st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
-            return
-        
-        selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
-            else f"1 estación: {stations_for_analysis[0]}"
-        st.info(f"Mostrando análisis para {selected_stations_str} en el período "
+def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analysis,
+                             df_monthly_filtered):
+    st.header("Mapas Avanzados")
+    if not stations_for_analysis:
+        st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
+        return
+    
+    selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
+        else f"1 estación: {stations_for_analysis[0]}"
+    st.info(f"Mostrando análisis para {selected_stations_str} en el período "
             f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+    
+    tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
+                 "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
+    gif_tab, mapa_interactivo_tab, temporal_tab, race_tab, anim_tab, compare_tab, kriging_tab = \
+        st.tabs(tab_names)
+
+    with gif_tab:
+        st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
         
-        tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
-                     "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
-        gif_tab, mapa_interactivo_tab, temporal_tab, race_tab, anim_tab, compare_tab, kriging_tab = \
-            st.tabs(tab_names)
-
-        with gif_tab:
-            st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
+        if os.path.exists(Config.GIF_PATH):
+            col_controls, col_gif = st.columns([1, 3])
             
-            if os.path.exists(Config.GIF_PATH):
-                col_controls, col_gif = st.columns([1, 3])
+            with col_controls:
+                if st.button("🔄 Reiniciar Animación"):
+                    st.session_state['gif_reload_key'] += 1
+                    st.rerun()
                 
-                with col_controls:
-                    # Botón de reinicio que incrementa la clave para forzar la recarga
-                    if st.button("🔄 Reiniciar Animación"):
-                        st.session_state['gif_reload_key'] += 1
-                        st.rerun()
+            with col_gif:
+                try:
+                    with open(Config.GIF_PATH, "rb") as file:
+                        contents = file.read()
+                    data_url = base64.b64encode(contents).decode("utf-8")
                     
-                with col_gif:
-                    try:
-                        # Volvemos a la implementación original más compatible
-                        with open(Config.GIF_PATH, "rb") as file:
-                            contents = file.read()
-                        data_url = base64.b64encode(contents).decode("utf-8")
-                        
-                        st.markdown(
-                            f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
-                            f'style="width:70%; max-width: 600px;" '
-                            f'key="gif_display_{st.session_state["gif_reload_key"]}">',
-                            unsafe_allow_html=True
-                        )
-                        
-                    except Exception as e:
-                        st.warning(f"Error al cargar/mostrar GIF: {e}")
+                    st.markdown(
+                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
+                        f'style="width:70%; max-width: 600px;" '
+                        f'key="gif_display_{st.session_state["gif_reload_key"]}">',
+                        unsafe_allow_html=True
+                    )
+                    
+                except Exception as e:
+                    st.warning(f"Error al cargar/mostrar GIF: {e}")
 
-            else:
-                st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
+        else:
+            st.warning(f"No se encontró el archivo GIF en la ruta especificada: {Config.GIF_PATH}. Asegúrate de que 'PPAM.gif' esté en la carpeta 'data'.")
 
-        with mapa_interactivo_tab:
-            st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
-            station_to_show = st.selectbox("Seleccione la estación a visualizar:",
-                                           options=sorted(stations_for_analysis), key="station_map_select")
-            
-            if station_to_show:
-                controls_col, map_col = st.columns([1, 3])
-                with controls_col:
-                    st.subheader("Controles del Mapa")
-                    selected_base_map_config, selected_overlays_config = display_map_controls(st,
-                                                                                             "avanzado_estaciones")
-                with map_col:
-                    station_data_list = gdf_filtered[gdf_filtered[Config.STATION_NAME_COL] ==
-                                                      station_to_show]
-                    if not station_data_list.empty:
-                        station_data = station_data_list.iloc[0]
-                        # Aumento de zoom para centrar en la estación
-                        m = create_folium_map(
-                            location=[station_data['geometry'].y, station_data['geometry'].x],
-                            zoom=10, # Aumentar el zoom para mejor visualización
-                            base_map_config=selected_base_map_config,
-                            overlays_config=selected_overlays_config
-                        )
-                        
-                        df_station_monthly_avg = \
-                            df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] ==
+    with mapa_interactivo_tab:
+        st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
+        station_to_show = st.selectbox("Seleccione la estación a visualizar:",
+                                       options=sorted(stations_for_analysis), key="station_map_select")
+        
+        if station_to_show:
+            controls_col, map_col = st.columns([1, 3])
+            with controls_col:
+                st.subheader("Controles del Mapa")
+                selected_base_map_config, selected_overlays_config = display_map_controls(st,
+                                                                                         "avanzado_estaciones")
+            with map_col:
+                station_data_list = gdf_filtered[gdf_filtered[Config.STATION_NAME_COL] ==
                                                   station_to_show]
-                        
-                        # Generar el mini-gráfico y popup
-                        if not df_station_monthly_avg.empty:
-                            # Reutilizar la lógica del popup, indicando que incluya el gráfico
-                            popup_html = generate_station_popup_html(station_data, df_anual_melted,
-                                                                     include_chart=True, df_monthly_filtered=df_monthly_filtered)
-                            folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
-                                          popup=folium.Popup(popup_html, max_width=400)).add_to(m)
-                        else:
-                            # Popup básico
-                            popup_html = generate_station_popup_html(station_data, df_anual_melted) 
-                            folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
-                                          tooltip=station_data[Config.STATION_NAME_COL],
-                                          popup=folium.Popup(popup_html)).add_to(m)
-                        
-                        folium.LayerControl().add_to(m)
-                        folium_static(m, height=600, width="100%") # Aumento de altura para renderizado
+                if not station_data_list.empty:
+                    station_data = station_data_list.iloc[0]
+                    m = create_folium_map(
+                        location=[station_data['geometry'].y, station_data['geometry'].x],
+                        zoom=10, 
+                        base_map_config=selected_base_map_config,
+                        overlays_config=selected_overlays_config
+                    )
+                    
+                    df_station_monthly_avg = \
+                        df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] ==
+                                                  station_to_show]
+                    
+                    if not df_station_monthly_avg.empty:
+                        popup_html = generate_station_popup_html(station_data, df_anual_melted,
+                                                                 include_chart=True, df_monthly_filtered=df_monthly_filtered)
+                        folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
+                                      popup=folium.Popup(popup_html, max_width=400)).add_to(m)
                     else:
-                        st.warning(f"No se encontró información geográfica para la estación {station_to_show}.")
+                        popup_html = generate_station_popup_html(station_data, df_anual_melted) 
+                        folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
+                                      tooltip=station_data[Config.STATION_NAME_COL],
+                                      popup=folium.Popup(popup_html)).add_to(m)
+                    
+                    folium.LayerControl().add_to(m)
+                    folium_static(m, height=600, width="100%") 
+                else:
+                    st.warning(f"No se encontró información geográfica para la estación {station_to_show}.")
 
         with temporal_tab:
             st.subheader("Explorador Anual de Precipitación")
@@ -837,7 +829,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                     df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
                                                               == selected_year]
 
-                    # Resumen de datos en la columna de control
                     if not df_year_filtered.empty:
                         st.metric("Estaciones con Datos", len(df_year_filtered))
                         st.metric("Promedio Anual", f"{df_year_filtered[Config.PRECIPITATION_COL].mean():.0f} mm")
@@ -864,7 +855,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                                                df_anual_melted_non_na[Config.PRECIPITATION_COL].max()
                             if min_val >= max_val: max_val = min_val + 1
                             
-                            # Usar Viridis de Matplotlib (Compatible universalmente)
                             colormap = cm.LinearColormap(
                                 colors=mpl_cm.get_cmap('viridis').colors,
                                 vmin=min_val,
@@ -872,7 +862,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                             )
 
                             for _, row in df_map_data.iterrows():
-                                # Reutilización del popup:
                                 popup_html = generate_station_popup_html(row, df_anual_melted)
                                 
                                 folium.CircleMarker(
@@ -918,7 +907,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
 
                 fig_racing.update_traces(texttemplate='%{x:.0f}', textposition='outside')
                 
-                # Ajuste del rango del eje X (Asegurar límite superior explícito)
                 max_val_plot = df_anual_melted[Config.PRECIPITATION_COL].max()
                 x_range = [0, max_val_plot * 1.15 if max_val_plot > 0 else 100]
 
@@ -954,7 +942,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                     all_selected_stations_info = \
                         gdf_filtered.drop_duplicates(subset=[Config.STATION_NAME_COL])
                     
-                    # Crear grid completo de estaciones y años para asegurar todos los frames
                     full_grid = pd.MultiIndex.from_product([all_selected_stations_info[Config.STATION_NAME_COL], all_years],
                                                            names=[Config.STATION_NAME_COL,
                                                                   Config.YEAR_COL]).to_frame(index=False)
@@ -981,10 +968,8 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                         df_anual_melted[Config.PRECIPITATION_COL].min(), \
                         df_anual_melted[Config.PRECIPITATION_COL].max()
                     
-                    # ELIMINAR COLUMNA GEOMETRY ANTES DE PLOTLY (para evitar TypeError)
                     df_anim_plot = df_anim_complete.drop(columns=['geometry']).copy()
                     
-                    # Usando YlGnBu (paleta corregida de Plotly)
                     fig_mapa_animado = px.scatter_geo(df_anim_plot,
                                                       lat=df_anim_plot[Config.LATITUDE_COL],
                                                       lon=df_anim_plot[Config.LONGITUDE_COL],
@@ -1143,11 +1128,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                                                  verbose=False, enable_plotting=False)
                             z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                             
-                            # CÓDIGO CORREGIDO PARA EL VARIOGRAMA
-                            # Se crea una figura explícita y se usa plt.gcf() para obtenerla
-                            fig_variogram = plt.figure()
-                            ok.display_variogram_model()
-                            plt.close(fig_variogram)
+                            fig_variogram = ok.display_variogram_model()
                         elif method == "IDW":
                             z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                         elif method == "Spline (Thin Plate)":
@@ -1179,7 +1160,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                     return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
 
                 # Layout para los controles
-                control_col, map_col1, map_col2 = st.columns([1, 2, 2])
+                control_col, display_col = st.columns([1, 2])
                 
                 with control_col:
                     st.markdown("##### Controles de los Mapas")
