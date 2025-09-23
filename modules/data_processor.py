@@ -129,7 +129,6 @@ def complete_series(_df):
     progress_bar.empty()
     return pd.concat(all_completed_dfs, ignore_index=True)
 
-
 @st.cache_data
 def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded_zip_shapefile):
     """Carga y procesa todos los archivos de entrada y los fusiona en dataframes listos para usar."""
@@ -148,25 +147,26 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
         st.error("No se encontraron columnas de longitud y/o latitud en el archivo de estaciones.")
         return None, None, None, None
 
-    # CONVERSIÓN NUMÉRICA ESTANDARIZADA con standardize_numeric_column
     df_stations_raw[lon_col] = standardize_numeric_column(df_stations_raw[lon_col]) 
     df_stations_raw[lat_col] = standardize_numeric_column(df_stations_raw[lat_col]) 
     
+    # --- CAMBIO: Asegurarnos de que la columna ET se procese como numérica ---
+    if Config.ET_COL in df_stations_raw.columns:
+        df_stations_raw[Config.ET_COL] = standardize_numeric_column(df_stations_raw[Config.ET_COL])
+
     df_stations_raw.dropna(subset=[lon_col, lat_col], inplace=True)
     
     gdf_stations = gpd.GeoDataFrame(df_stations_raw,
-                                     geometry=gpd.points_from_xy(df_stations_raw[lon_col], df_stations_raw[lat_col]),
-                                     crs="EPSG:9377").to_crs("EPSG:4326")
+                                    geometry=gpd.points_from_xy(df_stations_raw[lon_col], df_stations_raw[lat_col]),
+                                    crs="EPSG:9377").to_crs("EPSG:4326")
     
     gdf_stations[Config.LONGITUDE_COL] = gdf_stations.geometry.x
     gdf_stations[Config.LATITUDE_COL] = gdf_stations.geometry.y
     
     if Config.ALTITUDE_COL in gdf_stations.columns:
-        # CONVERSIÓN NUMÉRICA ESTANDARIZADA para altitud
         gdf_stations[Config.ALTITUDE_COL] = standardize_numeric_column(gdf_stations[Config.ALTITUDE_COL])
 
     #--- 2. Procesar Precipitación (df_long)
-    # Asume que los IDs de estación son las columnas con solo dígitos
     station_id_cols = [col for col in df_precip_raw.columns if col.isdigit()]
     
     if not station_id_cols:
@@ -178,18 +178,15 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
     df_long = df_precip_raw.melt(id_vars=id_vars, value_vars=station_id_cols,
                                  var_name='id_estacion', value_name=Config.PRECIPITATION_COL)
                                  
-    # Conversión numérica estandarizada para índices y precipitación
     cols_to_numeric = [Config.ENSO_ONI_COL, 'temp_sst', 'temp_media',
                        Config.PRECIPITATION_COL, Config.SOI_COL, Config.IOD_COL]
     
     for col in cols_to_numeric:
         if col in df_long.columns:
-            # CONVERSIÓN NUMÉRICA ESTANDARIZADA
             df_long[col] = standardize_numeric_column(df_long[col])
 
     df_long.dropna(subset=[Config.PRECIPITATION_COL], inplace=True)
     
-    # Manejo de fechas
     df_long[Config.DATE_COL] = parse_spanish_dates(df_long[Config.DATE_COL])
     df_long.dropna(subset=[Config.DATE_COL], inplace=True)
     
@@ -197,7 +194,6 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
     df_long[Config.YEAR_COL] = df_long[Config.DATE_COL].dt.year
     df_long[Config.MONTH_COL] = df_long[Config.DATE_COL].dt.month
     
-    # Mapeo de IDs a Nombres de Estación
     id_estacion_col_name = next((col for col in gdf_stations.columns if 'id_estacio' in col), None)
     
     if id_estacion_col_name is None:
@@ -213,10 +209,11 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
     df_long[Config.STATION_NAME_COL] = df_long['id_estacion'].map(station_mapping)
     df_long.dropna(subset=[Config.STATION_NAME_COL], inplace=True)
     
-    # Merge de metadatos de estación
+    # --- CAMBIO: Añadir la columna ET_COL al merge ---
     station_metadata_cols = [
         Config.STATION_NAME_COL, Config.MUNICIPALITY_COL, Config.REGION_COL,
-        Config.ALTITUDE_COL, Config.CELL_COL, Config.LATITUDE_COL, Config.LONGITUDE_COL
+        Config.ALTITUDE_COL, Config.CELL_COL, Config.LATITUDE_COL, Config.LONGITUDE_COL,
+        Config.ET_COL  # <-- AÑADIR ESTA LÍNEA
     ]
     existing_metadata_cols = [col for col in station_metadata_cols if col in gdf_stations.columns]
     
@@ -239,11 +236,9 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
         
     for col in [Config.ENSO_ONI_COL, 'temp_sst', 'temp_media']:
         if col in df_enso.columns:
-            # CONVERSIÓN NUMÉRICA ESTANDARIZADA para ENSO
             df_enso[col] = standardize_numeric_column(df_enso[col])
 
     return gdf_stations, gdf_municipios, df_long, df_enso
-
 
 def interpolate_idw(lons, lats, vals, grid_lon, grid_lat, power=2):
     """Realiza una interpolación por Distancia Inversa Ponderada (IDW)."""
