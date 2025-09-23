@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Aumenta el límite de inotify para el monitoreo de archivos
+# Increase the inotify limit for file monitoring
 echo fs.inotify.max_user_watches=524288 | tee -a /etc/sysctl.conf && sysctl -p
 
-# Ejecuta el comando de inicio de Streamlit
+# Start the Streamlit app
 exec streamlit run app.py
