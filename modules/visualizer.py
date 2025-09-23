@@ -720,7 +720,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
             df_regional_avg.rename(columns={'Precipitación Promedio': 'Precipitación Promedio Regional (mm)'}, inplace=True)
             st.dataframe(df_regional_avg.round(1), use_container_width=True)
 
-
 def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melted, df_monthly_filtered):
     st.header("Mapas Avanzados")
     if not stations_for_analysis:
@@ -1542,6 +1541,7 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
                        "'anomalia_oni' no fue encontrada o no tiene datos en el período seleccionado.")
             return
 
+        # --- INICIO DE LA MODIFICACIÓN ---
         st.subheader("Configuración del Análisis de Correlación con ENSO")
         # 1. Añadir slider para el desfase (lag)
         lag_months = st.slider(
@@ -1551,7 +1551,8 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
             value=0,
             help="Analiza la correlación de la precipitación con el ENSO de 'x' meses atrás. Un desfase de 3 significa correlacionar la lluvia de hoy con el ENSO de hace 3 meses."
         )
-        
+        # --- FIN DE LA MODIFICACIÓN ---
+
         df_corr_analysis = df_monthly_filtered.dropna(subset=[Config.PRECIPITATION_COL,
                                                               Config.ENSO_ONI_COL])
         if df_corr_analysis.empty:
@@ -1569,7 +1570,7 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
                                            key="enso_corr_station")
             if station_to_corr:
                 df_plot_corr = df_corr_analysis[df_corr_analysis[Config.STATION_NAME_COL] ==
-                                                station_to_corr]
+                                                station_to_corr].copy() # Usamos .copy() para evitar warnings
                 title_text = f"Correlación para la estación: {station_to_corr}"
         else: # Promedio
             df_plot_corr = df_corr_analysis.groupby(Config.DATE_COL).agg(
@@ -1579,8 +1580,23 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
             title_text = "Correlación para el promedio de las estaciones seleccionadas"
 
         if not df_plot_corr.empty and len(df_plot_corr) > 2:
-            corr, p_value = stats.pearsonr(df_plot_corr['anomalia_oni'], df_plot_corr['precipitation'])
-            st.subheader(title_text)
+            
+            # --- INICIO DE LA MODIFICACIÓN ---
+            # 2. Aplicar el desfase a la columna de ENSO
+            if lag_months > 0:
+                # .shift() desplaza los datos. Un lag de 1 mes significa que la fila de Feb-2020 tendrá el valor de Ene-2020
+                df_plot_corr['anomalia_oni_shifted'] = df_plot_corr['anomalia_oni'].shift(lag_months)
+                df_plot_corr.dropna(subset=['anomalia_oni_shifted'], inplace=True) # Eliminar NaNs creados por el shift
+                oni_column_to_use = 'anomalia_oni_shifted'
+                lag_text = f" (con desfase de {lag_months} meses)"
+            else:
+                oni_column_to_use = 'anomalia_oni'
+                lag_text = ""
+
+            corr, p_value = stats.pearsonr(df_plot_corr[oni_column_to_use], df_plot_corr['precipitation'])
+            st.subheader(title_text + lag_text)
+            # --- FIN DE LA MODIFICACIÓN ---
+
             col1, col2 = st.columns(2)
             col1.metric("Coeficiente de Correlación (r)", f"{corr:.3f}")
             col2.metric("Significancia (valor p)", f"{p_value:.4f}")
@@ -1590,11 +1606,17 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
             else:
                 st.warning("La correlación no es estadísticamente significativa. No hay evidencia de una relación lineal fuerte.")
 
+            # --- INICIO DE LA MODIFICACIÓN ---
+            # 3. Actualizar el gráfico para usar la columna con desfase
             fig_corr = px.scatter(
-                df_plot_corr, x='anomalia_oni', y='precipitation', trendline='ols',
-                title="Gráfico de Dispersión: Precipitación vs. Anomalía ONI",
-                labels={'anomalia_oni': 'Anomalía ONI (°C)', 'precipitation': 'Precipitación Mensual (mm)'}
+                df_plot_corr, x=oni_column_to_use, y='precipitation', trendline='ols',
+                title=f"Dispersión: Precipitación vs. Anomalía ONI{lag_text}",
+                labels={
+                    oni_column_to_use: f'Anomalía ONI (°C) [desfase {lag_months}m]',
+                    'precipitation': 'Precipitación Mensual (mm)'
+                }
             )
+            # --- FIN DE LA MODIFICACIÓN ---
             st.plotly_chart(fig_corr, use_container_width=True)
 
     with station_corr_tab:
@@ -1706,7 +1728,7 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
                     st.plotly_chart(fig_scatter_indices, use_container_width=True)
                 else:
                     st.warning("No hay suficientes datos superpuestos entre la estación y el índice para calcular la correlación.")
-
+                    
 def display_enso_tab(df_monthly_filtered, df_enso, gdf_filtered, stations_for_analysis):
     st.header("Análisis de Precipitación y el Fenómeno ENSO")
 
@@ -1831,6 +1853,8 @@ def display_enso_tab(df_monthly_filtered, df_enso, gdf_filtered, stations_for_an
             else:
                 st.info("Seleccione una fecha para visualizar el mapa.")
 
+# El resto de las funciones (display_trends_and_forecast_tab, display_downloads_tab, etc.)
+# se mantienen sin cambios. Aquí se incluyen para que el archivo esté completo.
 def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stations_for_analysis):
     st.header("Análisis de Tendencias y Pronósticos")
     if not stations_for_analysis:
@@ -2172,15 +2196,15 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
                 for station in stations_for_analysis:
                     station_data = df_anual_calc[df_anual_calc[Config.STATION_NAME_COL] ==
                                                  station].dropna(subset=[Config.PRECIPITATION_COL]).sort_values(by=Config.YEAR_COL)
-                    
+
                     slope_lin, p_lin = np.nan, np.nan
                     trend_mk, p_mk, slope_sen = "Datos insuficientes", np.nan, np.nan
 
                     if len(station_data) > 2:
                         station_data['año_num'] = pd.to_numeric(station_data[Config.YEAR_COL])
-                        slope_lin, p_lin, _, _, _ = stats.linregress(station_data['año_num'],
-                                                                     station_data[Config.PRECIPITATION_COL])
-                    
+                        slope_lin, _, _, p_lin, _ = stats.linregress(station_data['año_num'],
+                                                                   station_data[Config.PRECIPITATION_COL])
+
                     if len(station_data) > 3:
                         mk_result_table = mk.original_test(station_data[Config.PRECIPITATION_COL])
                         trend_mk = mk_result_table.trend.capitalize()
@@ -2232,7 +2256,7 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
         **Residuo**: Representa la variabilidad restante después de eliminar la tendencia y la
         estacionalidad.
         """)
-        
+
         station_to_decompose = st.selectbox("Seleccione una estación para la descomposición:",
                                             options=stations_for_analysis, key="decompose_station_select")
 
@@ -2240,10 +2264,10 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
             df_station = df_monthly_to_process[df_monthly_to_process[Config.STATION_NAME_COL] == station_to_decompose].copy()
             if not df_station.empty:
                 df_station.set_index(Config.DATE_COL, inplace=True)
-                
+
                 try:
                     result = get_decomposition_results(df_station[Config.PRECIPITATION_COL], period=12, model='additive')
-                    
+
                     fig_decomp = go.Figure()
                     fig_decomp.add_trace(go.Scatter(x=df_station.index, y=df_station[Config.PRECIPITATION_COL], mode='lines',
                                                     name='Original'))
@@ -2253,12 +2277,12 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
                                                     mode='lines', name='Estacionalidad'))
                     fig_decomp.add_trace(go.Scatter(x=result.resid.index, y=result.resid, mode='lines',
                                                     name='Residuo'))
-                    
+
                     fig_decomp.update_layout(title=f"Descomposición de la Serie de Precipitación para "
-                                                  f"{station_to_decompose}",
-                                                  height=600,
-                                                  legend=dict(orientation='h', yanchor="bottom", y=1.02, xanchor="right",
-                                                              x=1))
+                                             f"{station_to_decompose}",
+                                             height=600,
+                                             legend=dict(orientation='h', yanchor="bottom", y=1.02, xanchor="right",
+                                                         x=1))
                     st.plotly_chart(fig_decomp, use_container_width=True)
 
                 except Exception as e:
@@ -2273,7 +2297,7 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
         st.markdown("Estos gráficos ayudan a entender la dependencia de la precipitación con sus "
                     "valores pasados (rezagos). Las barras que superan el área azul sombreada indican una correlación "
                     "estadísticamente significativa.")
-        
+
         station_to_analyze_acf = st.selectbox("Seleccione una estación:",
                                               options=stations_for_analysis, key="acf_station_select")
         max_lag = st.slider("Número máximo de rezagos (meses):", min_value=12, max_value=60,
@@ -2287,7 +2311,7 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
             if not df_station_acf.empty:
                 df_station_acf.set_index(Config.DATE_COL, inplace=True)
                 df_station_acf = df_station_acf.asfreq('MS')
-                
+
                 # Interpolar para asegurar serie continua para ACF/PACF
                 df_station_acf[Config.PRECIPITATION_COL] = \
                     df_station_acf[Config.PRECIPITATION_COL].interpolate(method='time').dropna()
@@ -2296,7 +2320,7 @@ def display_trends_and_forecast_tab(df_anual_melted, df_monthly_to_process, stat
                     try:
                         fig_acf = create_acf_chart(df_station_acf[Config.PRECIPITATION_COL], max_lag)
                         st.plotly_chart(fig_acf, use_container_width=True)
-                        
+
                         fig_pacf = create_pacf_chart(df_station_acf[Config.PRECIPITATION_COL], max_lag)
                         st.plotly_chart(fig_pacf, use_container_width=True)
 
@@ -2330,7 +2354,7 @@ def display_downloads_tab(df_anual_melted, df_monthly_filtered, stations_for_ana
 
     if st.session_state.analysis_mode == "Completar series (interpolación)":
         st.markdown("**Datos de Precipitación Mensual (Series Completadas y Filtradas)**")
-        
+
         df_completed_to_download = (st.session_state.df_monthly_processed[
             (st.session_state.df_monthly_processed[Config.STATION_NAME_COL].isin(stations_for_analysis)) &
             (st.session_state.df_monthly_processed[Config.DATE_COL].dt.year >=
@@ -2338,18 +2362,18 @@ def display_downloads_tab(df_anual_melted, df_monthly_filtered, stations_for_ana
             (st.session_state.df_monthly_processed[Config.DATE_COL].dt.year <=
              st.session_state.year_range[1]) &
             (st.session_state.df_monthly_processed[Config.DATE_COL].dt.month.isin(st.session_state.meses_numeros))
-        ]).copy() 
+        ]).copy()
 
         csv_completado = convert_df_to_csv(df_completed_to_download)
         st.download_button("Descargar CSV con Series Completadas", csv_completado,
-                           'precipitacion_mensual_completada.csv', 'text/csv', key='download-completado')
+                            'precipitacion_mensual_completada.csv', 'text/csv', key='download-completado')
 
 def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analysis):
     st.header("Información Detallada de las Estaciones")
     if not stations_for_analysis:
         st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
         return
-    
+
     selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
         else f"1 estación: {stations_for_analysis[0]}"
     st.info(f"Mostrando información para {selected_stations_str} en el período "
@@ -2357,7 +2381,7 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
     if gdf_filtered.empty:
         st.info("No hay estaciones que cumplan con los filtros geográficos y de datos seleccionados.")
-        return 
+        return
 
     df_info_table = gdf_filtered[[Config.STATION_NAME_COL, Config.ALTITUDE_COL,
                                   Config.MUNICIPALITY_COL, Config.REGION_COL,
@@ -2380,14 +2404,13 @@ def display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analys
 
     st.dataframe(df_for_display, use_container_width=True)
 
-# Marcador de Posición para Funciones No Definidas
 def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc):
     """
     Realiza y muestra el análisis de sequías y eventos extremos por percentiles
     mensuales para una estación.
     """
     df_long = st.session_state.get('df_long')
-    
+
     if df_long is None or df_long.empty:
         st.warning("No se puede realizar el análisis de percentiles. El DataFrame histórico no está disponible.")
         return
@@ -2396,7 +2419,7 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
     col1, col2 = st.columns(2)
     p_lower = col1.slider("Percentil Inferior (Sequía):", 1, 40, 10, key="p_lower_perc")
     p_upper = col2.slider("Percentil Superior (Húmedo):", 60, 99, 90, key="p_upper_perc")
-    
+
     st.markdown("---")
 
     with st.spinner(f"Calculando percentiles {p_lower} y {p_upper} para {station_to_analyze_perc}...") :
@@ -2404,49 +2427,49 @@ def display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_p
             df_extremes, df_thresholds = calculate_percentiles_and_extremes(
                 df_long, station_to_analyze_perc, p_lower, p_upper
             )
-            
+
             df_plot = df_extremes[
                 (df_extremes[Config.DATE_COL].dt.year >= st.session_state.year_range[0]) &
                 (df_extremes[Config.DATE_COL].dt.year <= st.session_state.year_range[1]) &
                 (df_extremes[Config.DATE_COL].dt.month.isin(st.session_state.meses_numeros))
             ].copy()
-            
+
             if df_plot.empty:
                 st.warning("No hay datos que coincidan con los filtros de tiempo para la estación seleccionada.")
                 return
 
             st.subheader(f"Serie de Tiempo con Eventos Extremos ({p_lower} y {p_upper} Percentiles)")
-            
-            color_map = {'Sequía Extrema (< P{}%)'.format(p_lower): 'red', 
-                         'Húmedo Extremo (> P{}%)'.format(p_upper): 'blue', 
+
+            color_map = {'Sequía Extrema (< P{}%)'.format(p_lower): 'red',
+                         'Húmedo Extremo (> P{}%)'.format(p_upper): 'blue',
                          'Normal': 'gray'}
 
             fig_series = px.scatter(df_plot, x=Config.DATE_COL, y=Config.PRECIPITATION_COL,
-                                     color='event_type',
-                                     color_discrete_map=color_map,
-                                     title=f"Precipitación Mensual y Eventos Extremos en {station_to_analyze_perc}",
-                                     labels={Config.PRECIPITATION_COL: "Precipitación (mm)", 
-                                             Config.DATE_COL: "Fecha"},
-                                     hover_data={'event_type': True, 'p_lower': ':.0f', 'p_upper': ':.0f'})
-            
-            mean_precip = df_long[Config.PRECIPITATION_COL].mean()
+                                    color='event_type',
+                                    color_discrete_map=color_map,
+                                    title=f"Precipitación Mensual y Eventos Extremos en {station_to_analyze_perc}",
+                                    labels={Config.PRECIPITATION_COL: "Precipitación (mm)",
+                                            Config.DATE_COL: "Fecha"},
+                                    hover_data={'event_type': True, 'p_lower': ':.0f', 'p_upper': ':.0f'})
+
+            mean_precip = df_long[df_long[Config.STATION_NAME_COL] == station_to_analyze_perc][Config.PRECIPITATION_COL].mean()
             fig_series.add_hline(y=mean_precip, line_dash="dash", line_color="green", annotation_text="Media Histórica")
 
             fig_series.update_layout(height=500)
             st.plotly_chart(fig_series, use_container_width=True)
 
             st.subheader("Umbrales de Percentil Mensual (Climatología Histórica)")
-            
-            meses_map_inv = {1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun', 
+
+            meses_map_inv = {1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
                              7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'}
             df_thresholds['Month_Name'] = df_thresholds[Config.MONTH_COL].map(meses_map_inv)
 
             fig_thresh = go.Figure()
-            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['p_upper'], 
+            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['p_upper'],
                                             mode='lines+markers', name=f'Percentil Superior (P{p_upper}%)', line=dict(color='blue')))
-            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['p_lower'], 
+            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['p_lower'],
                                             mode='lines+markers', name=f'Percentil Inferior (P{p_lower}%)', line=dict(color='red')))
-            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['mean_monthly'], 
+            fig_thresh.add_trace(go.Scatter(x=df_thresholds['Month_Name'], y=df_thresholds['mean_monthly'],
                                             mode='lines', name='Media Mensual', line=dict(color='green', dash='dot')))
 
             fig_thresh.update_layout(title='Umbrales de Precipitación por Mes (Basado en Climatología)',
