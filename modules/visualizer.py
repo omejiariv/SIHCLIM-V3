@@ -1145,14 +1145,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     on=Config.STATION_NAME_COL
                 )
                 
-                # Para la unión posterior con GeoDataFrame, necesitamos la columna 'geometry'
-                # La volvemos a crear usando las coordenadas LAT/LON que se usaron para el merge,
-                # ya que data_year_with_geom perdió la columna 'geometry' en la selección inicial
-                data_year_with_geom_geo = gpd.GeoDataFrame(data_year_with_geom, 
-                                                            geometry=gpd.points_from_xy(data_year_with_geom[Config.LONGITUDE_COL], data_year_with_geom[Config.LATITUDE_COL]),
-                                                            crs="EPSG:4326")
-
-                if len(data_year_with_geom_geo) < 4:
+                if len(data_year_with_geom) < 4:
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
@@ -1173,8 +1166,11 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # Visualización del variograma
-                        fig_variogram = ok.display_variogram_model()
+                        # Corrección para el variograma
+                        fig_variogram, ax = plt.subplots(1, 1)
+                        ok.display_variogram_model(ax=ax)
+                        
+                        st.markdown("##### Variograma del Mapa")
                         st.pyplot(fig_variogram)
                         buf = io.BytesIO()
                         fig_variogram.savefig(buf, format="png")
@@ -1184,6 +1180,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                             file_name=f"variograma_{year}_{variogram_model}.png",
                             mime="image/png"
                         )
+                        plt.close(fig_variogram) # Cierra la figura para evitar warnings
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
                     elif method == "Spline (Thin Plate)":
@@ -1199,7 +1196,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                                     colorscale=px.colors.sequential.YlGnBu,
                                                     contours=dict(showlabels=True,
                                                                   labelfont=dict(size=10, color='white'),
-                                                                  labelformat=".0f" # <-- CORRECCIÓN AQUÍ: Cambiado a "labelformat" y ".0f" para enteros
+                                                                  labelformat=".0f"
                                                                   )))
                     
                     fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
@@ -1224,7 +1221,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                 with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
                     fig2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
                     st.plotly_chart(fig2, use_container_width=True)
-
 
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
