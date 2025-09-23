@@ -229,7 +229,7 @@ def load_and_process_all_data(uploaded_file_mapa, uploaded_file_precip, uploaded
     
     #--- 3. Extraer datos ENSO para gráficos aislados
     enso_cols = ['id', Config.DATE_COL, Config.ENSO_ONI_COL, 'temp_sst', 'temp_media']
-    existing_enso_cols = [col for col in df_precip_raw.columns if col in enso_cols]
+    existing_enso_cols = [col for col in enso_cols if col in df_precip_raw.columns]
     
     df_enso = df_precip_raw[existing_enso_cols].drop_duplicates().copy()
     
@@ -253,7 +253,6 @@ def interpolate_idw(lons, lats, vals, grid_lon, grid_lat, power=2):
         for j in range(ny):
             x, y = grid_lon[i], grid_lat[j]
             distances = np.sqrt((lons - x)**2 + (lats - y)**2)
-            # Si un punto de la grilla coincide con un punto de datos, usa ese valor.
             if np.any(distances < 1e-10):
                 grid_z[j, i] = vals[np.argmin(distances)]
                 continue
