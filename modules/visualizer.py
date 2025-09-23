@@ -1166,9 +1166,8 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # Corrección para el variograma
-                        fig_variogram, ax = plt.subplots(1, 1)
-                        ok.display_variogram_model(ax=ax)
+                        # CORRECCIÓN: Llamamos a display_variogram_model sin el argumento 'ax'
+                        fig_variogram = ok.display_variogram_model()
                         
                         st.markdown("##### Variograma del Mapa")
                         st.pyplot(fig_variogram)
