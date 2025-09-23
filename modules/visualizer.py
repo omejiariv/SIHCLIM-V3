@@ -27,7 +27,7 @@ import io
 from modules.config import Config
 from modules.utils import add_folium_download_button, standardize_numeric_column
 from modules.data_processor import interpolate_idw, interpolate_rbf_spline
-from modules.analysis import calculate_spi, calculate_monthly_anomalies, calculate_percentiles_and_extremes
+from modules.analysis import calculate_spi, calculate_spei, calculate_monthly_anomalies, calculate_percentiles_and_extremes
 from modules.forecasting import (
     generate_sarima_forecast, generate_prophet_forecast,
     get_decomposition_results, create_acf_chart, create_pacf_chart
@@ -1225,17 +1225,17 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                 else:
                     st.info("El variograma no está disponible para este método o no hay suficientes datos.")
 
-def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
+def display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
-    st.markdown("Esta sección ofrece dos metodologías para identificar eventos extremos: el "
-                "**análisis de percentiles** para extremos puntuales y el **Índice Estandarizado de Precipitación "
-                "(SPI)** para evaluar la intensidad de la sequía o humedad.")
+    st.markdown("Esta sección permite identificar eventos extremos usando el **análisis de percentiles** o "
+                "evaluar la intensidad de la sequía/humedad con los índices **SPI** (basado en precipitación) y "
+                "**SPEI** (basado en precipitación y temperatura).")
 
     if not stations_for_analysis:
         st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
         return
 
-    percentile_sub_tab, spi_sub_tab = st.tabs(["Análisis por Percentiles", "Análisis SPI"])
+    percentile_sub_tab, indices_sub_tab = st.tabs(["Análisis por Percentiles", "Índices de Sequía (SPI/SPEI)"])
 
     with percentile_sub_tab:
         station_to_analyze_perc = st.selectbox("Seleccione una estación para el análisis de percentiles:",
@@ -1244,56 +1244,80 @@ def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
         if station_to_analyze_perc:
             display_percentile_analysis_subtab(df_monthly_filtered, station_to_analyze_perc)
 
-    with spi_sub_tab:
-        st.subheader("Análisis con el índice Estandarizado de Precipitación (SPI)")
-        col1_spi, col2_spi = st.columns([1, 2])
-
-        with col1_spi:
-            station_to_analyze_spi = st.selectbox("Seleccione una estación para el análisis SPI:",
+    # --- INICIO DE LA MODIFICACIÓN ---
+    with indices_sub_tab:
+        st.subheader("Análisis con Índices Estandarizados")
+        
+        col1_idx, col2_idx = st.columns([1, 2])
+        
+        with col1_idx:
+            # Widget para seleccionar el tipo de índice
+            index_type = st.radio("Seleccione el Índice a Calcular:", ("SPI", "SPEI"))
+            
+            station_to_analyze_idx = st.selectbox("Seleccione una estación para el análisis:",
                                                   options=sorted(stations_for_analysis),
-                                                  key="spi_station_select")
-            spi_window = st.select_slider("Seleccione la escala de tiempo del SPI (meses):",
-                                          options=[3, 6, 9, 12, 24], value=12, key="spi_window_slider",
-                                          help="Una escala corta (3 meses) refleja sequías agrícolas. Una escala larga (12-24 meses) refleja sequías hidrológicas.")
+                                                  key="index_station_select")
+            
+            index_window = st.select_slider("Seleccione la escala de tiempo (meses):",
+                                           options=[3, 6, 9, 12, 24], value=12, key="index_window_slider",
+                                           help="Escalas cortas (3m) reflejan sequías agrícolas. Escalas largas (12-24m) reflejan sequías hidrológicas.")
+        
+        if station_to_analyze_idx:
+            df_station_idx = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_to_analyze_idx].copy()
+            df_station_idx = df_station_idx.set_index(Config.DATE_COL).sort_index()
 
-        if station_to_analyze_spi:
-            df_station_spi = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] ==
-                                                 station_to_analyze_spi].copy()
-            df_station_spi = df_station_spi.set_index(Config.DATE_COL).sort_index()
-            precip_series = df_station_spi[Config.PRECIPITATION_COL]
+            index_values = pd.Series(dtype=float)
 
-            if len(precip_series.dropna()) < spi_window * 2:
-                with col2_spi:
-                    st.warning(f"No hay suficientes datos ({len(precip_series.dropna())} meses) para calcular el SPI-{spi_window}.")
-            else:
-                with st.spinner(f"Calculando SPI-{spi_window}..."):
-                    df_station_spi['spi'] = calculate_spi(precip_series, spi_window)
+            if index_type == "SPI":
+                precip_series = df_station_idx[Config.PRECIPITATION_COL]
+                if len(precip_series.dropna()) < index_window * 2:
+                    with col2_idx:
+                        st.warning(f"No hay suficientes datos ({len(precip_series.dropna())} meses) para calcular el SPI-{index_window}.")
+                else:
+                    with st.spinner(f"Calculando SPI-{index_window}..."):
+                        index_values = calculate_spi(precip_series, index_window)
 
-                df_plot = df_station_spi.dropna(subset=['spi']).copy()
-
+            elif index_type == "SPEI":
+                # Para SPEI, necesitamos precipitación, temperatura y latitud
+                if 'temp_media' not in df_station_idx.columns or df_station_idx['temp_media'].isnull().all():
+                    with col2_idx:
+                        st.error("No hay datos de temperatura ('temp_media') disponibles para esta estación. No se puede calcular el SPEI.")
+                else:
+                    precip_series = df_station_idx[Config.PRECIPITATION_COL]
+                    temp_series = df_station_idx['temp_media']
+                    # Obtenemos la latitud del geodataframe
+                    station_lat = gdf_filtered[gdf_filtered[Config.STATION_NAME_COL] == station_to_analyze_idx].iloc[0].geometry.y
+                    
+                    if len(precip_series.dropna()) < index_window * 2 or len(temp_series.dropna()) < index_window * 2:
+                        with col2_idx:
+                            st.warning(f"No hay suficientes datos de precipitación o temperatura para calcular el SPEI-{index_window}.")
+                    else:
+                        with st.spinner(f"Calculando SPEI-{index_window}..."):
+                            index_values = calculate_spei(precip_series, temp_series, station_lat, index_window)
+            
+            # Graficar los resultados si se calcularon valores
+            if not index_values.empty:
+                df_plot = pd.DataFrame({'index_val': index_values}).dropna()
+                
                 conditions = [
-                    df_plot['spi'] <= -2.0, (df_plot['spi'] > -2.0) & (df_plot['spi'] <= -1.5),
-                    (df_plot['spi'] > -1.5) & (df_plot['spi'] <= -1.0), (df_plot['spi'] > -1.0) & (df_plot['spi'] <
-                                                                                                  1.0),
-                    (df_plot['spi'] >= 1.0) & (df_plot['spi'] < 1.5), (df_plot['spi'] >= 1.5) & (df_plot['spi'] <
-                                                                                                2.0),
-                    df_plot['spi'] >= 2.0
+                    df_plot['index_val'] <= -2.0, (df_plot['index_val'] > -2.0) & (df_plot['index_val'] <= -1.5),
+                    (df_plot['index_val'] > -1.5) & (df_plot['index_val'] <= -1.0), (df_plot['index_val'] > -1.0) & (df_plot['index_val'] < 1.0),
+                    (df_plot['index_val'] >= 1.0) & (df_plot['index_val'] < 1.5), (df_plot['index_val'] >= 1.5) & (df_plot['index_val'] < 2.0),
+                    df_plot['index_val'] >= 2.0
                 ]
                 colors = ['#b2182b', '#ef8a62', '#fddbc7', '#d1e5f0', '#92c5de', '#4393c3', '#2166ac']
                 df_plot['color'] = np.select(conditions, colors, default='grey')
-
+                
                 fig = go.Figure()
-                fig.add_trace(go.Bar(x=df_plot.index, y=df_plot['spi'], marker_color=df_plot['color'],
-                                     name='SPI'))
+                fig.add_trace(go.Bar(x=df_plot.index, y=df_plot['index_val'], marker_color=df_plot['color'], name=index_type))
+                
+                fig.update_layout(title=f"Índice {index_type}-{index_window} para {station_to_analyze_idx}",
+                                  yaxis_title=f"Valor {index_type}", xaxis_title="Fecha", height=600)
 
-                fig.update_layout(title=f"Índice Estandarizado de Precipitación (SPI-{spi_window}) para "
-                                  f"{station_to_analyze_spi}",
-                                  yaxis_title="Valor SPI", xaxis_title="Fecha", height=600)
-
-                with col2_spi:
+                with col2_idx:
                     st.plotly_chart(fig, use_container_width=True)
-                    with st.expander("Ver tabla de datos SPI"):
-                        st.dataframe(df_plot[['spi']].style.format("{:.2f}"))
+                    with st.expander(f"Ver tabla de datos {index_type}"):
+                        st.dataframe(df_plot[['index_val']].rename(columns={'index_val': index_type}).style.format("{:.2f}"))
 
 def display_anomalies_tab(df_long, df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Anomalías de Precipitación")
