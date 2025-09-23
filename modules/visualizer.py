@@ -14,7 +14,7 @@ import numpy as np
 import os
 import base64
 import branca.colormap as cm
-import matplotlib.cm as mpl_cm
+import matplotlib.cm as mpl_cm 
 from pykrige.ok import OrdinaryKriging
 from scipy import stats
 from scipy.interpolate import Rbf 
@@ -1102,7 +1102,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                         fig = go.Figure()
                         fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                           xaxis_visible=False, yaxis_visible=False)
-                        return fig, None, f"Error: No hay suficientes datos para el año {year}"
+                        return fig, None
                     
                     lons = data_year_with_geom[Config.LONGITUDE_COL].values
                     lats = data_year_with_geom[Config.LATITUDE_COL].values
@@ -1113,7 +1113,6 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                     grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
                     z_grid = None
                     fig_variogram = None
-                    error_message = None
                     
                     try:
                         if method == "Kriging Ordinario":
@@ -1129,8 +1128,8 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                             z_grid_raw = rbf(grid_lon, grid_lat)
                             z_grid = z_grid_raw.T 
                     except Exception as e:
-                        error_message = f"Error al calcular {method} para el año {year}: {e}"
-                        return go.Figure().update_layout(title=error_message), None, error_message
+                        st.error(f"Error al calcular {method} para el año {year}: {e}")
+                        return go.Figure().update_layout(title=f"Error en {method} para {year}"), None
 
                     if z_grid is not None:
                         fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
@@ -1148,14 +1147,14 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                                                  hoverinfo='text'))
                         
                         fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
-                        return fig, fig_variogram, None
+                        return fig, fig_variogram
                     
-                    return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
-
-                # Renderiza los controles en una columna
-                control_col = st.columns(1)
+                    return go.Figure().update_layout(title="Error: Método no implementado"), None
                 
-                with control_col[0]:
+                # Layout para los controles
+                control_col, display_col = st.columns([1, 2])
+                
+                with control_col:
                     st.markdown("##### Controles de los Mapas")
                     st.markdown("**Mapa 1**")
                     year1 = st.slider("Seleccione el año", min_year, max_year, max_year, key="interp_year1")
@@ -1178,57 +1177,58 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                         variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
 
                 # Generación de mapas y variogramas
-                fig1, fig_var1, error1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
-                fig2, fig_var2, error2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
+                fig1, fig_var1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
+                fig2, fig_var2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
                 
                 # Renderiza el contenido en la columna de visualización
-                st.markdown("---")
-                st.markdown("##### Mapas Interpolados")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if fig1:
-                        st.plotly_chart(fig1, use_container_width=True)
-                    else:
-                        st.info(error1)
-                with col2:
-                    if fig2:
-                        st.plotly_chart(fig2, use_container_width=True)
-                    else:
-                        st.info(error2)
-                        
-                st.markdown("---")
-                st.markdown("##### Variogramas de los Mapas")
-                col3, col4 = st.columns(2)
-                
-                with col3:
-                    if fig_var1:
-                        st.pyplot(fig_var1)
-                        buf = io.BytesIO()
-                        fig_var1.savefig(buf, format="png")
-                        st.download_button(
-                            label="Descargar Variograma 1 (PNG)",
-                            data=buf.getvalue(),
-                            file_name=f"variograma_1_{year1}_{method1}_{variogram_model1}.png",
-                            mime="image/png"
-                        )
-                        plt.close(fig_var1)
-                    else:
-                        st.info("El variograma no está disponible para este método o no hay suficientes datos.")
-                
-                with col4:
-                    if fig_var2:
-                        st.pyplot(fig_var2)
-                        buf = io.BytesIO()
-                        fig_var2.savefig(buf, format="png")
-                        st.download_button(
-                            label="Descargar Variograma 2 (PNG)",
-                            data=buf.getvalue(),
-                            file_name=f"variograma_2_{year2}_{method2}_{variogram_model2}.png",
-                            mime="image/png"
-                        )
-                        plt.close(fig_var2)
-                    else:
-                        st.info("El variograma no está disponible para este método o no hay suficientes datos.")
+                with display_col:
+                    # Mapas
+                    st.markdown("##### Mapas Interpolados")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if fig1:
+                            st.plotly_chart(fig1, use_container_width=True)
+                        else:
+                            st.info("El mapa 1 no se pudo generar.")
+                    with col2:
+                        if fig2:
+                            st.plotly_chart(fig2, use_container_width=True)
+                        else:
+                            st.info("El mapa 2 no se pudo generar.")
+
+                    st.markdown("---")
+                    st.markdown("##### Variogramas de los Mapas")
+                    col3, col4 = st.columns(2)
+                    
+                    with col3:
+                        if fig_var1:
+                            st.pyplot(fig_var1)
+                            buf = io.BytesIO()
+                            fig_var1.savefig(buf, format="png")
+                            st.download_button(
+                                label="Descargar Variograma 1 (PNG)",
+                                data=buf.getvalue(),
+                                file_name=f"variograma_1_{year1}_{method1}_{variogram_model1}.png",
+                                mime="image/png"
+                            )
+                            plt.close(fig_var1)
+                        else:
+                            st.info("El variograma no está disponible para este método o no hay suficientes datos.")
+                    
+                    with col4:
+                        if fig_var2:
+                            st.pyplot(fig_var2)
+                            buf = io.BytesIO()
+                            fig_var2.savefig(buf, format="png")
+                            st.download_button(
+                                label="Descargar Variograma 2 (PNG)",
+                                data=buf.getvalue(),
+                                file_name=f"variograma_2_{year2}_{method2}_{variogram_model2}.png",
+                                mime="image/png"
+                            )
+                            plt.close(fig_var2)
+                        else:
+                            st.info("El variograma no está disponible para este método o no hay suficientes datos.")
                     
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
