@@ -719,49 +719,48 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
             df_regional_avg.rename(columns={'Precipitación Promedio': 'Precipitación Promedio Regional (mm)'}, inplace=True)
             st.dataframe(df_regional_avg.round(1), use_container_width=True)
 
-def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analysis,
-                             df_monthly_filtered):
-    st.header("Mapas Avanzados")
-    if not stations_for_analysis:
-        st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
-        return
-    
-    selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
-        else f"1 estación: {stations_for_analysis[0]}"
-    st.info(f"Mostrando análisis para {selected_stations_str} en el período "
-            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
-    
-    tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
-                 "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
-    gif_tab, mapa_interactivo_tab, temporal_tab, race_tab, anim_tab, compare_tab, kriging_tab = \
-        st.tabs(tab_names)
-
-    with gif_tab:
-        st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
+    with display_advanced_maps_tab:
+        st.header("Mapas Avanzados")
+        if not stations_for_analysis:
+            st.warning("Por favor, seleccione al menos una estación para ver esta sección.")
+            return
         
-        if os.path.exists(Config.GIF_PATH):
-            col_controls, col_gif = st.columns([1, 3])
+        selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
+            else f"1 estación: {stations_for_analysis[0]}"
+        st.info(f"Mostrando análisis para {selected_stations_str} en el período "
+            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+        
+        tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
+                     "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
+        gif_tab, mapa_interactivo_tab, temporal_tab, race_tab, anim_tab, compare_tab, kriging_tab = \
+            st.tabs(tab_names)
+
+        with gif_tab:
+            st.subheader("Distribución Espacio-Temporal de la Lluvia en Antioquia")
             
-            with col_controls:
-                if st.button("🔄 Reiniciar Animación"):
-                    st.session_state['gif_reload_key'] += 1
-                    st.rerun()
+            if os.path.exists(Config.GIF_PATH):
+                col_controls, col_gif = st.columns([1, 3])
                 
-            with col_gif:
-                try:
-                    with open(Config.GIF_PATH, "rb") as file:
-                        contents = file.read()
-                    data_url = base64.b64encode(contents).decode("utf-8")
+                with col_controls:
+                    if st.button("🔄 Reiniciar Animación"):
+                        st.session_state['gif_reload_key'] += 1
+                        st.rerun()
                     
-                    st.markdown(
-                        f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
-                        f'style="width:70%; max-width: 600px;" '
-                        f'key="gif_display_{st.session_state["gif_reload_key"]}">',
-                        unsafe_allow_html=True
-                    )
-                    
-                except Exception as e:
-                    st.warning(f"Error al cargar/mostrar GIF: {e}")
+                with col_gif:
+                    try:
+                        with open(Config.GIF_PATH, "rb") as file:
+                            contents = file.read()
+                        data_url = base64.b64encode(contents).decode("utf-8")
+                        
+                        st.markdown(
+                            f'<img src="data:image/gif;base64,{data_url}" alt="Animación PPAM" '
+                            f'style="width:70%; max-width: 600px;" '
+                            f'key="gif_display_{st.session_state["gif_reload_key"]}">',
+                            unsafe_allow_html=True
+                        )
+                        
+                    except Exception as e:
+                        st.warning(f"Error al cargar/mostrar GIF: {e}")
 
         with mapa_interactivo_tab:
             st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
@@ -1153,7 +1152,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     
                     return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
 
-                # Renderiza los controles en la columna de visualización
                 control_col, map_col1, map_col2 = st.columns([1, 2, 2])
                 
                 with control_col:
@@ -1178,11 +1176,9 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
                         variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
 
-                # Generación de mapas y variogramas
                 fig1, fig_var1, error1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
                 fig2, fig_var2, error2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
                 
-                # Renderiza el contenido en la columna de visualización
                 with map_col1:
                     if fig1:
                         st.plotly_chart(fig1, use_container_width=True)
