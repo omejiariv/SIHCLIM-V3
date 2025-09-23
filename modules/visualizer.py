@@ -11,6 +11,7 @@ from streamlit_folium import folium_static
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import io
 import os
 import base64
 import branca.colormap as cm
