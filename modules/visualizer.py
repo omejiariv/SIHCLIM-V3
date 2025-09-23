@@ -1115,7 +1115,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
             min_year, max_year = int(df_anual_non_na[Config.YEAR_COL].min()), \
                                  int(df_anual_non_na[Config.YEAR_COL].max())
             
-            control_col, map_col1, map_col2 = st.columns([1, 2, 2])
+            control_col, display_col = st.columns([1, 2])
             
             with control_col:
                 st.markdown("##### Controles de los Mapas")
@@ -1151,7 +1151,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                     fig = go.Figure()
                     fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
                                       xaxis_visible=False, yaxis_visible=False)
-                    return fig, None, None
+                    return fig, None
                 
                 lons = data_year_with_geom[Config.LONGITUDE_COL].values
                 lats = data_year_with_geom[Config.LATITUDE_COL].values
@@ -1169,7 +1169,6 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              verbose=False, enable_plotting=False)
                         z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
                         
-                        # CORRECTED: Returns the figure object
                         fig_variogram = ok.display_variogram_model()
                     elif method == "IDW":
                         z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
@@ -1179,7 +1178,7 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                         z_grid = z_grid_raw.T 
                 except Exception as e:
                     st.error(f"Error al calcular {method} para el año {year}: {e}")
-                    return go.Figure().update_layout(title=f"Error en {method} para {year}"), None, None
+                    return go.Figure().update_layout(title=f"Error en {method} para {year}"), None
 
                 if z_grid is not None:
                     fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
@@ -1197,55 +1196,55 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
                                              hoverinfo='text'))
                     
                     fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
-                    return fig, fig_variogram, (method, year, variogram_model)
+                    return fig, fig_variogram
                 
-                return go.Figure().update_layout(title="Error: Método no implementado"), None, None
-
-            # RENDER THE MAPS AND VARIOGRAMS
-            # We'll use Streamlit columns to display elements side-by-side
+                return go.Figure().update_layout(title="Error: Método no implementado"), None
             
-            map_col, variogram_col = st.columns(2)
-
-            # ----- MAPA 1 -----
-            with map_col:
-                with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
-                    fig1, fig_var1, meta1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
-                    st.plotly_chart(fig1, use_container_width=True)
-            
-            if fig_var1 is not None:
-                with variogram_col:
+            # This is the new rendering logic that will solve the layout issue.
+            with display_col:
+                # ----- MAPA 1 -----
+                col1, col2 = st.columns(2)
+                with col1:
+                    with st.spinner(f"Generando mapa 1 ({year1}, {method1}, {variogram_model1})..."):
+                        fig1, fig_var1 = generate_interpolation_map(year1, method1, variogram_model1, gdf_filtered)
+                        st.plotly_chart(fig1, use_container_width=True)
+                with col2:
                     st.markdown("##### Variograma del Mapa 1")
-                    st.pyplot(fig_var1)
-                    buf = io.BytesIO()
-                    fig_var1.savefig(buf, format="png")
-                    st.download_button(
-                        label="Descargar Variograma 1 (PNG)",
-                        data=buf.getvalue(),
-                        file_name=f"variograma_1_{meta1[1]}_{meta1[0]}_{meta1[2]}.png",
-                        mime="image/png"
-                    )
-                    plt.close(fig_var1)
-            
-            # ----- MAPA 2 -----
-            map_col, variogram_col = st.columns(2)
-            with map_col:
-                with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
-                    fig2, fig_var2, meta2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
-                    st.plotly_chart(fig2, use_container_width=True)
-            
-            if fig_var2 is not None:
-                with variogram_col:
+                    if fig_var1:
+                        st.pyplot(fig_var1)
+                        buf = io.BytesIO()
+                        fig_var1.savefig(buf, format="png")
+                        st.download_button(
+                            label="Descargar Variograma 1 (PNG)",
+                            data=buf.getvalue(),
+                            file_name=f"variograma_1_{year1}_{method1}_{variogram_model1}.png",
+                            mime="image/png"
+                        )
+                        plt.close(fig_var1)
+                    else:
+                        st.info("El variograma no está disponible para este método o no hay suficientes datos.")
+                
+                # ----- MAPA 2 -----
+                col3, col4 = st.columns(2)
+                with col3:
+                    with st.spinner(f"Generando mapa 2 ({year2}, {method2}, {variogram_model2})..."):
+                        fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
+                        st.plotly_chart(fig2, use_container_width=True)
+                with col4:
                     st.markdown("##### Variograma del Mapa 2")
-                    st.pyplot(fig_var2)
-                    buf = io.BytesIO()
-                    fig_var2.savefig(buf, format="png")
-                    st.download_button(
-                        label="Descargar Variograma 2 (PNG)",
-                        data=buf.getvalue(),
-                        file_name=f"variograma_2_{meta2[1]}_{meta2[0]}_{meta2[2]}.png",
-                        mime="image/png"
-                    )
-                    plt.close(fig_var2)
+                    if fig_var2:
+                        st.pyplot(fig_var2)
+                        buf = io.BytesIO()
+                        fig_var2.savefig(buf, format="png")
+                        st.download_button(
+                            label="Descargar Variograma 2 (PNG)",
+                            data=buf.getvalue(),
+                            file_name=f"variograma_2_{year2}_{method2}_{variogram_model2}.png",
+                            mime="image/png"
+                        )
+                        plt.close(fig_var2)
+                    else:
+                        st.info("El variograma no está disponible para este método o no hay suficientes datos.")
                     
 def display_drought_analysis_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
