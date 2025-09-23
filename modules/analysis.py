@@ -92,11 +92,6 @@ def calculate_percentiles_and_extremes(df_long, station_name, p_lower=10, p_uppe
 
     return df_station_extremes.dropna(subset=[Config.PRECIPITATION_COL]), df_thresholds
 
-import spei
-from scipy.stats import gamma, norm
-
-# ... (aquí van tus funciones existentes como calculate_spi, etc.)
-
 def calculate_spei(precip_series, et_series, scale):
     """
     Calcula el SPEI usando una serie de evapotranspiración pre-calculada.
