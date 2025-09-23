@@ -301,8 +301,7 @@ def display_spatial_distribution_tab(gdf_filtered, stations_for_analysis, df_anu
                             bounds = gdf_display.total_bounds
                             if np.all(np.isfinite(bounds)):
                                 center_lat = (bounds[1] + bounds[3]) / 2
-                                center_lon = (bounds[0] +
-                                              bounds[2]) / 2
+                                center_lon = (bounds[0] + bounds[2]) / 2
                                 st.session_state.map_view = {"location": [center_lat, center_lon], "zoom": 9}
                 st.markdown("---")
 
@@ -1136,7 +1135,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                         variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
                         variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
 
-                def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map):
+                def generate_interpolation_map(year, method, variogram_model, gdf_filtered_map):
                     data_year_with_geom = pd.merge(
                         df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
                         gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
