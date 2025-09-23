@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import spei
 from scipy.stats import gamma, norm
+import pandas as pd
 from modules.config import Config
 
 # --- Funciones de Análisis ---
@@ -118,6 +119,8 @@ def calculate_spei(precip_series, et_series, scale):
     water_balance = data['precip'] - data['et']
 
     # 3. Calcular el SPEI usando una distribución Log-Logística
-    spei_values = spei.spei(water_balance, scale, dist='log-logistic')
+    # --- LÍNEA CORREGIDA ---
+    # Se cambia 'dist' por el nombre completo del argumento 'distribution'
+    spei_values = spei.spei(water_balance, scale, distribution='log-logistic')
 
     return spei_values
