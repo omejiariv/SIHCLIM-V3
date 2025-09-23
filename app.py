@@ -1,5 +1,4 @@
 # app.py
-
 # -*- coding: utf-8 -*-
 
 # --- Importaciones Esenciales
@@ -34,7 +33,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # --- Función Principal de Streamlit
 def main():
     st.set_page_config(layout="wide", page_title=Config.APP_TITLE)
-    
+
     # Estilos CSS
     st.markdown("""
     <style>
@@ -94,12 +93,12 @@ def main():
             for key in keys_to_clear:
                 del st.session_state[key]
             st.rerun()
-    
+
     # --------------------------------------------------------------------------
     # LÓGICA PRINCIPAL: Solo se ejecuta si los datos ya han sido cargados
     # --------------------------------------------------------------------------
     if st.session_state.get('data_loaded', False) and st.session_state.get('df_long') is not None:
-        
+
         # --- FUNCIÓN DE FILTRADO (Se mantiene aquí por acoplamiento con Streamlit Session State)
         def apply_filters_to_stations(df, min_perc, altitudes, regions, municipios, celdas):
             stations_filtered = df.copy()
@@ -109,7 +108,7 @@ def main():
                     stations_filtered[Config.PERCENTAGE_COL] = \
                         pd.to_numeric(stations_filtered[Config.PERCENTAGE_COL].astype(str).str.replace(',', '.', regex=False),
                                       errors='coerce').fillna(0)
-                
+
                 stations_filtered = stations_filtered[stations_filtered[Config.PERCENTAGE_COL] >= min_perc]
 
             if altitudes:
@@ -126,47 +125,47 @@ def main():
             if regions: stations_filtered = stations_filtered[stations_filtered[Config.REGION_COL].isin(regions)]
             if municipios: stations_filtered = stations_filtered[stations_filtered[Config.MUNICIPALITY_COL].isin(municipios)]
             if celdas: stations_filtered = stations_filtered[stations_filtered[Config.CELL_COL].isin(celdas)]
-            
+
             return stations_filtered
-        
+
         # FUNCIÓN CALLBACK DE SINCRONIZACIÓN
         def sync_station_selection():
-            """Sincroniza el multiselect de estaciones con la casilla 'Seleccionar Todas'." """
+            """Sincroniza el multiselect de estaciones con la casilla 'Seleccionar Todas'."""
             options = sorted(st.session_state.get('filtered_station_options', []))
             if st.session_state.get('select_all_checkbox', True):
                 st.session_state.station_multiselect = options
             else:
                 st.session_state.station_multiselect = []
-        
+
         # ----------------------------------------------------
         # 1. Filtros Geográficos y de Datos
         # ----------------------------------------------------
         with st.sidebar.expander("**1. Filtros Geográficos y de Datos**", expanded=True):
             min_data_perc = st.slider("Filtrar por % de datos mínimo:", 0, 100,
                                       st.session_state.get('min_data_perc_slider', 0), key='min_data_perc_slider')
-            
+
             altitude_ranges = ['0-500', '500-1000', '1000-2000', '2000-3000', '>3000']
             selected_altitudes = st.multiselect('Filtrar por Altitud (m)', options=altitude_ranges,
                                                 key='altitude_multiselect')
-            
+
             regions_list = sorted(st.session_state.gdf_stations[Config.REGION_COL].dropna().unique())
             selected_regions = st.multiselect('Filtrar por Depto/Región', options=regions_list,
                                               key='regions_multiselect')
-            
+
             temp_gdf_for_mun = st.session_state.gdf_stations.copy()
             if selected_regions:
                 temp_gdf_for_mun = \
                     temp_gdf_for_mun[temp_gdf_for_mun[Config.REGION_COL].isin(selected_regions)]
-            
+
             municipios_list = sorted(temp_gdf_for_mun[Config.MUNICIPALITY_COL].dropna().unique())
             selected_municipios = st.multiselect('Filtrar por Municipio', options=municipios_list,
                                                  key='municipios_multiselect')
-            
+
             temp_gdf_for_celdas = temp_gdf_for_mun.copy()
             if selected_municipios:
                 temp_gdf_for_celdas = \
                     temp_gdf_for_celdas[temp_gdf_for_celdas[Config.MUNICIPALITY_COL].isin(selected_municipios)]
-            
+
             celdas_list = sorted(temp_gdf_for_celdas[Config.CELL_COL].dropna().unique())
             selected_celdas = st.multiselect('Filtrar por Celda_XY', options=celdas_list,
                                              key='celdas_multiselect')
@@ -203,7 +202,7 @@ def main():
             if st.session_state.get('select_all_checkbox', True) and \
                     st.session_state.get('station_multiselect') != stations_options:
                 st.session_state.station_multiselect = stations_options
-            
+
             selected_stations = st.multiselect(
                 'Seleccionar Estaciones',
                 options=stations_options,
@@ -212,10 +211,10 @@ def main():
 
             years_with_data = sorted(st.session_state.df_long[Config.YEAR_COL].unique())
             year_range_default = (min(years_with_data), max(years_with_data))
-            
+
             year_range = st.slider("Seleccionar Rango de Años", min_value=min(years_with_data),
                                    max_value=max(years_with_data), value=st.session_state.get('year_range',
-                                                                                              year_range_default),
+                                                                                               year_range_default),
                                    key='year_range')
 
             meses_dict = {'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4, 'Mayo': 5, 'Junio': 6, 'Julio': 7,
@@ -237,18 +236,18 @@ def main():
         # LÓGICA CENTRAL DE PREPROCESAMIENTO Y FILTRADO
         # ----------------------------------------------------
         stations_for_analysis = selected_stations
-        
+
         # Aplicar filtro de estación al GeoDataFrame
         gdf_filtered = \
             gdf_filtered[gdf_filtered[Config.STATION_NAME_COL].isin(stations_for_analysis)]
-        
+
         st.session_state.meses_numeros = meses_numeros
 
         if st.session_state.analysis_mode == "Completar series (interpolación)":
             df_monthly_processed = complete_series(st.session_state.df_long.copy())
         else:
             df_monthly_processed = st.session_state.df_long.copy()
-            
+
         st.session_state.df_monthly_processed = df_monthly_processed
 
         # Filtrado principal de datos mensuales (usa el df_monthly_processed, que puede ser interpolado o no)
@@ -298,7 +297,7 @@ def main():
             "Análisis de Correlación", "Análisis ENSO", "Tendencias y Pronósticos",
             "Descargas", "Tabla de Estaciones"
         ]
-        
+
         # Mapeo de pestañas a funciones
         tabs = st.tabs(tab_names)
 
@@ -311,7 +310,8 @@ def main():
             display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analysis,
                                gdf_filtered)
         with tabs[3]:
-            display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analysis,
+            # <<<<<<<<<<<<<<<<<<<< LÍNEA CORREGIDA <<<<<<<<<<<<<<<<<<<<
+            display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melted,
                                       df_monthly_filtered)
         with tabs[4]:
             display_anomalies_tab(st.session_state.df_long, df_monthly_filtered, stations_for_analysis)
