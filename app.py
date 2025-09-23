@@ -48,7 +48,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Inicialización de la sesión (se mantiene aquí, aunque originalmente estaba en config.py)
+    # Inicialización de la sesión
     Config.initialize_session_state()
 
     title_col1, title_col2 = st.columns([0.07, 0.93])
@@ -99,6 +99,9 @@ def main():
             st.rerun()
     # ----------------------------------------------------
     
+    # --------------------------------------------------------------------------
+    # LÓGICA PRINCIPAL: Solo se ejecuta si los datos ya han sido cargados
+    # --------------------------------------------------------------------------
     if st.session_state.get('data_loaded', False):
 
         # --- FUNCIÓN DE FILTRADO (Se mantiene aquí por acoplamiento con Streamlit Session State)
@@ -106,12 +109,7 @@ def main():
             stations_filtered = df.copy()
 
             if Config.PERCENTAGE_COL in stations_filtered.columns:
-                # Se utiliza la función standardize_numeric_column de utils.py
-                # NOTA: Esta función DEBE estar importada en data_processor.py y llamada aquí si fuera necesario
-                # Sin embargo, como se cargó y procesó en load_and_process_all_data,
-                # solo aseguraremos que sea numérica para los filtros:
                 if stations_filtered[Config.PERCENTAGE_COL].dtype == 'object':
-                    # Si aún no es numérica (por si falla el preprocesamiento)
                     stations_filtered[Config.PERCENTAGE_COL] = \
                         pd.to_numeric(stations_filtered[Config.PERCENTAGE_COL].astype(str).str.replace(',', '.', regex=False),
                                       errors='coerce').fillna(0)
@@ -121,7 +119,6 @@ def main():
             if altitudes:
                 conditions = []
                 for r in altitudes:
-                    # Las columnas de altitud deben ser numéricas después de load_and_process_all_data
                     if r == '0-500': conditions.append((stations_filtered[Config.ALTITUDE_COL] >= 0) & (stations_filtered[Config.ALTITUDE_COL] <= 500))
                     elif r == '500-1000': conditions.append((stations_filtered[Config.ALTITUDE_COL] > 500) & (stations_filtered[Config.ALTITUDE_COL] <= 1000))
                     elif r == '1000-2000': conditions.append((stations_filtered[Config.ALTITUDE_COL] > 1000) & (stations_filtered[Config.ALTITUDE_COL] <= 2000))
@@ -252,7 +249,6 @@ def main():
         st.session_state.meses_numeros = meses_numeros
 
         if st.session_state.analysis_mode == "Completar series (interpolación)":
-            # Llama a la función centralizada de data_processor.py
             df_monthly_processed = complete_series(st.session_state.df_long.copy())
         else:
             df_monthly_processed = st.session_state.df_long.copy()
@@ -334,7 +330,6 @@ def main():
             display_enso_tab(df_monthly_filtered, st.session_state.df_enso, gdf_filtered,
                              stations_for_analysis)
         with tabs[9]:
-            # Pasa df_monthly_processed (serie base para pronósticos) y no el df_monthly_filtered
             display_trends_and_forecast_tab(df_anual_melted,
                                             st.session_state.df_monthly_processed, stations_for_analysis)
         with tabs[10]:
@@ -343,9 +338,6 @@ def main():
             display_station_table_tab(gdf_filtered, df_anual_melted, stations_for_analysis)
 
     else:
+        # Esta es la lógica que se ejecuta SI los datos AÚN NO han sido cargados
         display_welcome_tab()
         st.info("Para comenzar, por favor cargue los 3 archivos requeridos en el panel de la izquierda.")
-
-
-if __name__ == "__main__":
-    main()
