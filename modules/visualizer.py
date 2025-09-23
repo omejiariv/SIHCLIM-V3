@@ -730,7 +730,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
         selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
             else f"1 estación: {stations_for_analysis[0]}"
         st.info(f"Mostrando análisis para {selected_stations_str} en el período "
-                f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
+            f"{st.session_state.year_range[0]} - {st.session_state.year_range[1]}.")
         
         tab_names = ["Animación GIF (Antioquia)", "Mapa Interactivo de Estaciones", "Visualización Temporal",
                      "Gráfico de Carrera", "Mapa Animado", "Comparación de Mapas", "Interpolación Comparativa"]
@@ -1111,6 +1111,71 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                 min_year, max_year = int(df_anual_non_na[Config.YEAR_COL].min()), \
                                      int(df_anual_non_na[Config.YEAR_COL].max())
                 
+                # Definición de la función de generación de datos
+                def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map):
+                    data_year_with_geom = pd.merge(
+                        df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
+                        gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
+                                          Config.LONGITUDE_COL]].drop_duplicates(),
+                        on=Config.STATION_NAME_COL
+                    )
+                    
+                    if len(data_year_with_geom) < 4:
+                        fig = go.Figure()
+                        fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
+                                          xaxis_visible=False, yaxis_visible=False)
+                        return fig, None, f"Error: No hay suficientes datos para el año {year}"
+                    
+                    lons = data_year_with_geom[Config.LONGITUDE_COL].values
+                    lats = data_year_with_geom[Config.LATITUDE_COL].values
+                    vals = data_year_with_geom[Config.PRECIPITATION_COL]
+                    
+                    bounds = gdf_filtered_map.total_bounds
+                    grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
+                    grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
+                    z_grid = None
+                    fig_variogram = None
+                    error_message = None
+                    
+                    try:
+                        if method == "Kriging Ordinario":
+                            ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
+                                                 verbose=False, enable_plotting=False)
+                            z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
+                            
+                            # CÓDIGO CORREGIDO PARA EL VARIOGRAMA
+                            fig_variogram = ok.display_variogram_model()
+                        elif method == "IDW":
+                            z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
+                        elif method == "Spline (Thin Plate)":
+                            rbf = Rbf(lons, lats, vals.values, function='thin_plate')
+                            z_grid_raw = rbf(grid_lon, grid_lat)
+                            z_grid = z_grid_raw.T 
+                    except Exception as e:
+                        error_message = f"Error al calcular {method} para el año {year}: {e}"
+                        return go.Figure().update_layout(title=error_message), None, error_message
+
+                    if z_grid is not None:
+                        fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
+                                                        colorscale=px.colors.sequential.YlGnBu,
+                                                        contours=dict(showlabels=True,
+                                                                      labelfont=dict(size=10, color='white'),
+                                                                      labelformat=".0f"
+                                                                      )))
+                        
+                        fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
+                                                 y=data_year_with_geom[Config.LATITUDE_COL],
+                                                 mode='markers', marker=dict(color='red', size=5), name='Estaciones',
+                                                 text=data_year_with_geom.apply(lambda row:
+                                                                            f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
+                                                 hoverinfo='text'))
+                        
+                        fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
+                        return fig, fig_variogram, None
+                    
+                    return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
+
+                # Layout para los controles
                 control_col, display_col = st.columns([1, 2])
                 
                 with control_col:
@@ -1135,81 +1200,25 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                         variogram_options = ['linear', 'spherical', 'exponential', 'gaussian', 'steinstochastic']
                         variogram_model2 = st.selectbox("Modelo de Variograma para Mapa 2", variogram_options, key="var_model_2")
 
-                def generate_interpolation_map(year, method, variogram_model, gdf_filtered_map):
-                    data_year_with_geom = pd.merge(
-                        df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
-                        gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
-                                          Config.LONGITUDE_COL]].drop_duplicates(),
-                        on=Config.STATION_NAME_COL
-                    )
-                    
-                    if len(data_year_with_geom) < 4:
-                        fig = go.Figure()
-                        fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
-                                          xaxis_visible=False, yaxis_visible=False)
-                        return fig, None
-                    
-                    lons = data_year_with_geom[Config.LONGITUDE_COL].values
-                    lats = data_year_with_geom[Config.LATITUDE_COL].values
-                    vals = data_year_with_geom[Config.PRECIPITATION_COL]
-                    
-                    bounds = gdf_filtered_map.total_bounds
-                    grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
-                    grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
-                    z_grid = None
-                    fig_variogram = None
-                    
-                    try:
-                        if method == "Kriging Ordinario":
-                            ok = OrdinaryKriging(lons, lats, vals.values, variogram_model=variogram_model,
-                                                 verbose=False, enable_plotting=False)
-                            z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
-                            
-                            # CÓDIGO CORREGIDO PARA EL VARIOGRAMA
-                            # Se crea una figura explícita y se usa plt.gcf() para obtenerla
-                            fig_variogram = plt.figure()
-                            ok.display_variogram_model()
-                            plt.close(fig_variogram)
-                        elif method == "IDW":
-                            z_grid = interpolate_idw(lons, lats, vals.values, grid_lon, grid_lat)
-                        elif method == "Spline (Thin Plate)":
-                            rbf = Rbf(lons, lats, vals.values, function='thin_plate')
-                            z_grid_raw = rbf(grid_lon, grid_lat)
-                            z_grid = z_grid_raw.T 
-                    except Exception as e:
-                        st.error(f"Error al calcular {method} para el año {year}: {e}")
-                        return go.Figure().update_layout(title=f"Error en {method} para {year}"), None
-
-                    if z_grid is not None:
-                        fig = go.Figure(data=go.Contour(z=z_grid, x=grid_lon, y=grid_lat,
-                                                        colorscale=px.colors.sequential.YlGnBu,
-                                                        contours=dict(showlabels=True,
-                                                                      labelfont=dict(size=10, color='white'),
-                                                                      labelformat=".0f"
-                                                                      )))
-                        
-                        fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
-                                                 y=data_year_with_geom[Config.LATITUDE_COL],
-                                                 mode='markers', marker=dict(color='red', size=5), name='Estaciones',
-                                                 text=data_year_with_geom.apply(lambda row:
-                                                                            f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
-                                                 hoverinfo='text'))
-                        
-                        fig.update_layout(title=f"Precipitación en {year} ({method} - {variogram_model})", height=600)
-                        return fig, fig_variogram
-                    
-                    return go.Figure().update_layout(title="Error: Método no implementado"), None
+                # Generación de mapas y variogramas
+                fig1, fig_var1, error1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
+                fig2, fig_var2, error2 = generate_interpolation_data(year2, method2, variogram_model2, gdf_filtered)
                 
                 # Renderiza el contenido en la columna de visualización
                 with display_col:
                     # Mapas
+                    st.markdown("##### Mapas Interpolados")
                     col1, col2 = st.columns(2)
                     with col1:
-                        fig1, fig_var1 = generate_interpolation_data(year1, method1, variogram_model1, gdf_filtered)
-                        st.plotly_chart(fig1, use_container_width=True)
+                        if fig1:
+                            st.plotly_chart(fig1, use_container_width=True)
+                        else:
+                            st.info(error1)
                     with col2:
-                        fig2, fig_var2 = generate_interpolation_map(year2, method2, variogram_model2, gdf_filtered)
-                        st.plotly_chart(fig2, use_container_width=True)
+                        if fig2:
+                            st.plotly_chart(fig2, use_container_width=True)
+                        else:
+                            st.info(error2)
                         
                     # Variogramas
                     st.markdown("---")
