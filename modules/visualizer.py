@@ -1542,6 +1542,16 @@ def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
                        "'anomalia_oni' no fue encontrada o no tiene datos en el período seleccionado.")
             return
 
+        st.subheader("Configuración del Análisis de Correlación con ENSO")
+        # 1. Añadir slider para el desfase (lag)
+        lag_months = st.slider(
+            "Seleccionar desfase temporal (meses)",
+            min_value=0,
+            max_value=12,
+            value=0,
+            help="Analiza la correlación de la precipitación con el ENSO de 'x' meses atrás. Un desfase de 3 significa correlacionar la lluvia de hoy con el ENSO de hace 3 meses."
+        )
+        
         df_corr_analysis = df_monthly_filtered.dropna(subset=[Config.PRECIPITATION_COL,
                                                               Config.ENSO_ONI_COL])
         if df_corr_analysis.empty:
