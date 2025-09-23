@@ -923,10 +923,11 @@ def display_advanced_maps_tab(gdf_filtered, df_anual_melted, stations_for_analys
             
             # Ajuste del rango del eje X (Asegurar límite superior explícito)
             max_val_plot = df_anual_melted[Config.PRECIPITATION_COL].max()
+            # This line ensures the x-axis scale is fixed for all frames, preventing erratic jumps.
             x_range = [0, max_val_plot * 1.15 if max_val_plot > 0 else 100]
 
             fig_racing.update_layout(
-                xaxis_range=x_range, # <-- THIS LINE IS CRITICAL
+                xaxis_range=x_range,
                 height=max(600, len(stations_for_analysis) * 35),
                 title_font_size=20, font_size=12,
                 yaxis=dict(categoryorder='total ascending')
