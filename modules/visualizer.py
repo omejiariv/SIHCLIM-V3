@@ -813,17 +813,15 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                 if not station_data_list.empty:
                     station_data = station_data_list.iloc[0]
                     
-                    # Usamos la nueva lógica de create_folium_map pasándole el gdf de una sola fila
                     m = create_folium_map(
                         location=[station_data['geometry'].y, station_data['geometry'].x],
                         zoom=12,
                         base_map_config=selected_base_map_config,
                         overlays_config=selected_overlays_config,
-                        fit_bounds_data=station_data_list # <- Se pasa el GeoDataFrame para centrar
+                        fit_bounds_data=station_data_list
                     )
-                                        
+                    
                     popup_object = generate_station_popup_html(
-
                         station_data, 
                         df_anual_melted,
                         include_chart=True, 
@@ -831,7 +829,8 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                     )
                     folium.Marker(
                         location=[station_data['geometry'].y, station_data['geometry'].x],
-                        popup=popup_object
+                        popup=popup_object,
+                        tooltip=station_data[Config.STATION_NAME_COL]
                     ).add_to(m)
 
                     folium.LayerControl().add_to(m)
@@ -1103,21 +1102,27 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
             col3, col4 = st.columns(2)
             with col3:
                 if fig_var1:
-                    st.pyplot(fig_var1)
+                    # --- CORRECCIÓN DE ORDEN ---
+                    # 1. Guardar la figura en un buffer en memoria PRIMERO
                     buf = io.BytesIO()
                     fig_var1.savefig(buf, format="png")
+                    # 2. Mostrar la figura en Streamlit
+                    st.pyplot(fig_var1)
+                    # 3. Usar el buffer para el botón de descarga
                     st.download_button(
                         label="Descargar Variograma 1 (PNG)", data=buf.getvalue(),
                         file_name=f"variograma_1_{year1}_{method1}_{variogram_model1}.png", mime="image/png"
                     )
+                    # 4. Cerrar la figura para liberar memoria
                     plt.close(fig_var1)
                 else:
                     st.info("El variograma no está disponible para este método o no hay suficientes datos.")
             with col4:
                 if fig_var2:
-                    st.pyplot(fig_var2)
+                    # --- CORRECCIÓN DE ORDEN ---
                     buf = io.BytesIO()
                     fig_var2.savefig(buf, format="png")
+                    st.pyplot(fig_var2)
                     st.download_button(
                         label="Descargar Variograma 2 (PNG)", data=buf.getvalue(),
                         file_name=f"variograma_2_{year2}_{method2}_{variogram_model2}.png", mime="image/png"
@@ -1421,7 +1426,7 @@ def display_stats_tab(df_long, df_anual_melted, df_monthly_filtered, stations_fo
                 st.info("No hay datos anuales válidos para mostrar la síntesis.")
         else:
             st.info("No hay datos para mostrar la síntesis general.")
-            
+
 def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Correlación")
     st.markdown("Esta sección cuantifica la relación lineal entre la precipitación y diferentes "
