@@ -665,6 +665,10 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
                 st.dataframe(df_regional_avg_display.round(1), use_container_width=True)
 
 def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map, df_anual_non_na):
+    """
+    Genera datos y gráficos para la interpolación espacial.
+    Incluye la corrección para mostrar el variograma y forzar tipos de datos numéricos.
+    """
     data_year_with_geom = pd.merge(
         df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
         gdf_filtered_map[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
@@ -678,8 +682,8 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
                           xaxis_visible=False, yaxis_visible=False)
         return fig, None, f"Error: No hay suficientes datos para el año {year}"
 
-    # --- INICIO DE LA CORRECCIÓN ---
-    # Limpieza robusta de datos antes de pasarlos al modelo
+    # --- CORRECCIÓN DE ROBUSTEZ ---
+    # Limpieza estricta de datos antes de pasarlos al modelo
     df_clean = data_year_with_geom.dropna(subset=[Config.LONGITUDE_COL, Config.LATITUDE_COL, Config.PRECIPITATION_COL]).copy()
     df_clean = df_clean[np.isfinite(df_clean[Config.LONGITUDE_COL])]
     df_clean = df_clean[np.isfinite(df_clean[Config.LATITUDE_COL])]
@@ -691,8 +695,7 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
     lons = df_clean[Config.LONGITUDE_COL].values
     lats = df_clean[Config.LATITUDE_COL].values
     vals = df_clean[Config.PRECIPITATION_COL].values
-    # --- FIN DE LA CORRECCIÓN ---
-
+    
     bounds = gdf_filtered_map.total_bounds
     grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
     grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
@@ -706,6 +709,8 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
                                  verbose=False, enable_plotting=False)
             z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
 
+            # --- CORRECCIÓN DEL VARIOGRAMA ---
+            # Se crea la figura de Matplotlib manualmente
             fig_variogram, ax = plt.subplots()
             ax.plot(ok.lags, ok.semivariance, 'o', label='Semivariograma Experimental')
             ax.plot(ok.lags,
@@ -735,11 +740,8 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
                                                       labelfont=dict(size=10, color='white'),
                                                       labelformat=".0f")))
         
-        fig.add_trace(go.Scatter(x=data_year_with_geom[Config.LONGITUDE_COL],
-                                 y=data_year_with_geom[Config.LATITUDE_COL],
-                                 mode='markers', marker=dict(color='red', size=5), name='Estaciones',
-                                 text=data_year_with_geom.apply(lambda row:
-                                                                f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm", axis=1),
+        fig.add_trace(go.Scatter(x=lons, y=lats, mode='markers', marker=dict(color='red', size=5), name='Estaciones',
+                                 text=[f"{row[Config.STATION_NAME_COL]}: {row[Config.PRECIPITATION_COL]:.0f} mm" for _, row in df_clean.iterrows()],
                                  hoverinfo='text'))
         
         fig.update_layout(title=f"Precipitación en {year} ({method})", height=600)
@@ -784,6 +786,8 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                     )
                 except Exception as e:
                     st.warning(f"Error al cargar/mostrar GIF: {e}")
+        else:
+            st.warning("No se encontró el archivo GIF en la ruta especificada.")
 
     with mapa_interactivo_tab:
         st.subheader("Visualización de una Estación con Mini-gráfico de Precipitación")
@@ -807,7 +811,6 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                         overlays_config=selected_overlays_config
                     )
                     
-                    # Se llama a la función y el objeto popup se usa directamente
                     popup_object = generate_station_popup_html(
                         station_data, 
                         df_anual_melted,
@@ -816,8 +819,10 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                     )
                     folium.Marker(
                         location=[station_data['geometry'].y, station_data['geometry'].x],
-                        popup=popup_object  # Se asigna el objeto directamente
+                        popup=popup_object
                     ).add_to(m)
+
+                    folium.LayerControl().add_to(m)
                     folium_static(m, height=600, width="100%")
                 else:
                     st.warning(f"No se encontró información geográfica para la estación {station_to_show}.")
@@ -848,7 +853,6 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                 df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
                                                           == selected_year]
                 if not df_year_filtered.empty:
-                    
                     cols_to_merge = [
                         Config.STATION_NAME_COL, Config.LATITUDE_COL, Config.LONGITUDE_COL, 
                         Config.MUNICIPALITY_COL, Config.ALTITUDE_COL, 'geometry'
@@ -858,7 +862,6 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                         gdf_filtered[cols_to_merge].drop_duplicates(),
                         on=Config.STATION_NAME_COL, how="inner"
                     )
-                   
                     if not df_map_data.empty:
                         min_val, max_val = df_anual_melted_non_na[Config.PRECIPITATION_COL].min(), \
                             df_anual_melted_non_na[Config.PRECIPITATION_COL].max()
@@ -1110,10 +1113,6 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                     plt.close(fig_var2)
                 else:
                     st.info("El variograma no está disponible para este método o no hay suficientes datos.")
-
-#
-# --- (CONTINUACIÓN DEL ARCHIVO visualizer.py) ---
-#
 
 def display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
