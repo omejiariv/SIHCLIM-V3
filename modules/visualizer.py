@@ -38,44 +38,44 @@ from modules.forecasting import (
 def generate_station_popup_html(row, df_anual_melted, include_chart=False,
                                 df_monthly_filtered=None):
     """
-    Genera el contenido para el popup de una estación de forma robusta.
+    Genera el contenido para el popup de una estación de forma robusta y a prueba de fallos.
     """
+    full_html = ""
     station_name = row.get(Config.STATION_NAME_COL, 'N/A')
     
-    # Lógica para obtener el rango de años
-    year_range_val = st.session_state.get('year_range', (2000, 2020))
-    if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
-        year_min, year_max = year_range_val
-    else: 
-        year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
-    total_years_in_period = year_max - year_min + 1
+    try:
+        # --- 1. Generar el HTML del texto ---
+        year_range_val = st.session_state.get('year_range', (2000, 2020))
+        if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
+            year_min, year_max = year_range_val
+        else:
+            year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
+        total_years_in_period = year_max - year_min + 1
 
-    # Lógica para calcular estadísticas
-    df_station_data = df_anual_melted[df_anual_melted[Config.STATION_NAME_COL] == station_name]
-    if not df_station_data.empty:
-        summary_data = df_station_data.groupby(Config.STATION_NAME_COL).agg(
-            precip_media_anual=('precipitation', 'mean'),
-            años_validos=('precipitation', 'count')
-        ).iloc[0]
-        valid_years = int(summary_data.get('años_validos', 0))
-        precip_media_anual = summary_data.get('precip_media_anual', 0)
-    else:
-        valid_years = 0
-        precip_media_anual = 0
+        df_station_data = df_anual_melted[df_anual_melted[Config.STATION_NAME_COL] == station_name]
+        if not df_station_data.empty:
+            summary_data = df_station_data.groupby(Config.STATION_NAME_COL).agg(
+                precip_media_anual=('precipitation', 'mean'),
+                años_validos=('precipitation', 'count')
+            ).iloc[0]
+            valid_years = int(summary_data.get('años_validos', 0))
+            precip_media_anual = summary_data.get('precip_media_anual', 0)
+        else:
+            valid_years = 0
+            precip_media_anual = 0
 
-    # Genera el HTML del texto
-    text_html = f"""
-    <h4>{station_name}</h4>
-    <p><b>Municipio:</b> {row.get(Config.MUNICIPALITY_COL, 'N/A')}</p>
-    <p><b>Altitud:</b> {row.get(Config.ALTITUDE_COL, 'N/A')} m</p>
-    <p><b>Promedio Anual:</b> {precip_media_anual:.0f} mm</p>
-    <small>(Calculado con <b>{valid_years}</b> de <b>{total_years_in_period}</b> años del período)</small>
-    """
+        text_html = f"""
+        <h4>{station_name}</h4>
+        <p><b>Municipio:</b> {row.get(Config.MUNICIPALITY_COL, 'N/A')}</p>
+        <p><b>Altitud:</b> {row.get(Config.ALTITUDE_COL, 'N/A')} m</p>
+        <p><b>Promedio Anual:</b> {precip_media_anual:.0f} mm</p>
+        <small>(Calculado con <b>{valid_years}</b> de <b>{total_years_in_period}</b> años del período)</small>
+        """
+        full_html = text_html # Por defecto, el popup solo tendrá texto
 
-    chart_html = ""
-    # --- INICIO DE LA CORRECCIÓN CON TRY...EXCEPT ---
-    if include_chart and df_monthly_filtered is not None:
-        try:
+        # --- 2. Intentar generar el HTML del gráfico ---
+        chart_html = ""
+        if include_chart and df_monthly_filtered is not None:
             df_station_monthly_avg = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
             if not df_station_monthly_avg.empty:
                 df_monthly_avg = df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
@@ -84,19 +84,21 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
                     fig.update_layout(title_text="Ppt. Mensual Media", xaxis_title="Mes", yaxis_title="Ppt. (mm)", 
                                       height=250, width=350, margin=dict(t=40, b=20, l=20, r=20))
                     chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-        except Exception as e:
-            # Si algo falla en la creación del gráfico, lo ignoramos para que el mapa no se rompa
-            chart_html = ""
-            print(f"Error al generar el minigráfico para {station_name}: {e}") # Opcional: para debugging en la consola
-    # --- FIN DE LA CORRECCIÓN ---
 
-    # Combina el texto y el gráfico (si existe) en un solo bloque de HTML
-    if chart_html and "Error" not in chart_html:
-        sanitized_chart_html = chart_html.replace('"', '&quot;')
-        full_html = text_html + "<hr>" + f'<iframe srcdoc="{sanitized_chart_html}" width="370" height="270" frameborder="0"></iframe>'
-    else:
-        full_html = text_html
-        
+        # --- 3. Combinar ambos si el gráfico se generó con éxito ---
+        if chart_html:
+            sanitized_chart_html = chart_html.replace('"', '&quot;')
+            full_html = text_html + "<hr>" + f'<iframe srcdoc="{sanitized_chart_html}" width="370" height="270" frameborder="0"></iframe>'
+
+    except Exception as e:
+        # Si CUALQUIER COSA falla, nos aseguramos de que el popup al menos tenga el texto básico
+        # y mostramos una advertencia en la app para depuración.
+        st.warning(f"No se pudo generar el contenido completo del popup para '{station_name}'. Razón: {e}")
+        if 'text_html' in locals():
+            full_html = text_html
+        else:
+            full_html = f"<h4>{station_name}</h4><p>Error al cargar datos del popup.</p>"
+
     return folium.Popup(full_html, max_width=450)
 
 # --- Funciones Auxiliares de Gráficos y Mapas ---
