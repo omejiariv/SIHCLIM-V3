@@ -38,15 +38,15 @@ from modules.forecasting import (
 def generate_station_popup_html(row, df_anual_melted, include_chart=False,
                                 df_monthly_filtered=None):
     """
-    Genera el contenido para el popup de una estación.
+    Genera el contenido para el popup de una estación de forma robusta.
     """
-    station_name = row[Config.STATION_NAME_COL]
+    station_name = row.get(Config.STATION_NAME_COL, 'N/A')
     
     # Lógica para obtener el rango de años
     year_range_val = st.session_state.get('year_range', (2000, 2020))
     if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
         year_min, year_max = year_range_val
-    else: # Fallback para modo comparación o si el formato es inesperado
+    else: 
         year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
     total_years_in_period = year_max - year_min + 1
 
@@ -73,19 +73,25 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
     """
 
     chart_html = ""
+    # --- INICIO DE LA CORRECCIÓN CON TRY...EXCEPT ---
     if include_chart and df_monthly_filtered is not None:
-        df_station_monthly_avg = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
-        if not df_station_monthly_avg.empty:
-            df_monthly_avg = df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
-            if not df_monthly_avg.empty:
-                fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL], y=df_monthly_avg[Config.PRECIPITATION_COL])])
-                fig.update_layout(title_text="Ppt. Mensual Media", xaxis_title="Mes", yaxis_title="Ppt. (mm)", 
-                                  height=250, width=350, margin=dict(t=40, b=20, l=20, r=20))
-                chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+        try:
+            df_station_monthly_avg = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
+            if not df_station_monthly_avg.empty:
+                df_monthly_avg = df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
+                if not df_monthly_avg.empty:
+                    fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL], y=df_monthly_avg[Config.PRECIPITATION_COL])])
+                    fig.update_layout(title_text="Ppt. Mensual Media", xaxis_title="Mes", yaxis_title="Ppt. (mm)", 
+                                      height=250, width=350, margin=dict(t=40, b=20, l=20, r=20))
+                    chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+        except Exception as e:
+            # Si algo falla en la creación del gráfico, lo ignoramos para que el mapa no se rompa
+            chart_html = ""
+            print(f"Error al generar el minigráfico para {station_name}: {e}") # Opcional: para debugging en la consola
+    # --- FIN DE LA CORRECCIÓN ---
 
     # Combina el texto y el gráfico (si existe) en un solo bloque de HTML
-    if chart_html:
-        # Sanitizar las comillas dobles para que el IFrame funcione correctamente
+    if chart_html and "Error" not in chart_html:
         sanitized_chart_html = chart_html.replace('"', '&quot;')
         full_html = text_html + "<hr>" + f'<iframe srcdoc="{sanitized_chart_html}" width="370" height="270" frameborder="0"></iframe>'
     else:
