@@ -8,7 +8,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class Config:
-    # Nombres de Columnas de Datos
+    # --- Nombres de Columnas de Datos ---
     STATION_NAME_COL = 'nom_est'
     PRECIPITATION_COL = 'precipitation'
     LATITUDE_COL = 'latitud_geo'
@@ -24,19 +24,18 @@ class Config:
     PERCENTAGE_COL = 'porc_datos'
     CELL_COL = 'celda_xy'
     ET_COL = 'et_mmy'
-    # Índices climáticos
+    
+    # --- Índices climáticos ---
     SOI_COL = 'soi'
     IOD_COL = 'iod'
 
-    # Rutas de Archivos
+    # --- Rutas de Archivos ---
     LOGO_PATH = os.path.join(BASE_DIR, "data", "CuencaVerde_Logo.jpg")
     LOGO_DROP_PATH = os.path.join(BASE_DIR, "data", "CuencaVerde_Logo.jpg")
     GIF_PATH = os.path.join(BASE_DIR, "data", "PPAM.gif")
 
-    # Mensajes de la UI
+    # --- Mensajes de la UI ---
     APP_TITLE = "Sistema de información de las lluvias y el Clima en el norte de la región Andina"
-
-    # --- TEXTO DE BIENVENIDA ACTUALIZADO ---
     WELCOME_TEXT = """
     <p style="text-align: center; font-style: italic; font-size: 1.1em;">
     "El futuro, también depende del pasado y de nuestra capacidad presente para anticiparlo". — omr.
@@ -104,7 +103,8 @@ class Config:
             'prophet_forecast': None,
             'year_range': (1970, 2021),
             'meses_nombres': ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
-            'meses_numeros': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+            'meses_numeros': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            'gif_reload_key': 0
         }
         for key, value in state_defaults.items():
             if key not in st.session_state:
