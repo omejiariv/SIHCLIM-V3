@@ -22,6 +22,7 @@ from scipy.interpolate import Rbf
 import pymannkendall as mk
 from prophet.plot import plot_plotly
 import io
+import gstools as gs
 
 # --- Importaciones de Módulos Propios (Refactorizados) ---
 from modules.config import Config
