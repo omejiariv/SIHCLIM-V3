@@ -1,4 +1,4 @@
-# modules/visualizer.py
+# --- INICIO DEL ARCHIVO COMPLETO visualizer.py ---
 
 import streamlit as st
 import pandas as pd
@@ -33,10 +33,6 @@ from modules.forecasting import (
     get_decomposition_results, create_acf_chart, create_pacf_chart
 )
 
-# Inicializamos una variable de estado para controlar el reinicio del GIF
-if 'gif_reload_key' not in st.session_state:
-    st.session_state['gif_reload_key'] = 0
-
 # --- FUNCIÓN AUXILIAR PARA POPUP REUTILIZABLE (CORREGIDA) ---
 def generate_station_popup_html(row, df_anual_melted, include_chart=False,
                                 df_monthly_filtered=None):
@@ -49,7 +45,7 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
     year_range_val = st.session_state.get('year_range', (2000, 2020))
     if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
         year_min, year_max = year_range_val
-    else:
+    else: # Fallback para modo comparación o si el formato es inesperado
         year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
     total_years_in_period = year_max - year_min + 1
 
@@ -96,7 +92,7 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         
     return folium.Popup(full_html, max_width=450)
 
-    # --- Funciones Auxiliares de Gráficos y Mapas ---
+# --- Funciones Auxiliares de Gráficos y Mapas ---
 
 def create_enso_chart(enso_data):
     if enso_data.empty or Config.ENSO_ONI_COL not in enso_data.columns:
@@ -205,9 +201,8 @@ def create_folium_map(location, zoom, base_map_config, overlays_config, fit_boun
                      name=layer_config.get("attr", "Overlay")).add_to(m)
     return m
 
-#
 # --- Funciones de Pestañas Principales ---
-#
+
 def display_welcome_tab():
     st.header("Bienvenido al Sistema de Información de Lluvias y Clima")
     st.markdown(Config.WELCOME_TEXT, unsafe_allow_html=True)
@@ -223,7 +218,7 @@ def display_spatial_distribution_tab(gdf_filtered, stations_for_analysis, df_anu
 
     selected_stations_str = f"{len(stations_for_analysis)} estaciones" if len(stations_for_analysis) > 1 \
         else f"1 estación: {stations_for_analysis[0]}"
-    
+
     year_range_val = st.session_state.get('year_range', (2000, 2020))
     if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
         year_min, year_max = year_range_val
@@ -513,7 +508,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
             if not df_monthly_filtered.empty:
                 df_values = df_monthly_filtered.pivot_table(index=Config.DATE_COL,
                                                             columns=Config.STATION_NAME_COL, values=Config.PRECIPITATION_COL).round(1)
-                st.dataframe(df_values)
+                st.dataframe(df_values, use_container_width=True)
             else:
                 st.info("No hay datos mensuales detallados.")
 
