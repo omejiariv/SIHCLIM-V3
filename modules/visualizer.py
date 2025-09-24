@@ -191,11 +191,20 @@ def display_map_controls(container_object, key_prefix):
 def create_folium_map(location, zoom, base_map_config, overlays_config, fit_bounds_data=None):
     m = folium.Map(location=location, zoom_start=zoom, tiles=base_map_config.get("tiles",
                                                                                  "OpenStreetMap"), attr=base_map_config.get("attr", None))
+
+    # --- INICIO DE LA CORRECCIÓN ---
     if fit_bounds_data is not None and not fit_bounds_data.empty:
-        bounds = fit_bounds_data.total_bounds
-        if np.all(np.isfinite(bounds)):
-            m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
-    for layer_config in overlays_config:
+        # Si hay más de un punto, ajusta los límites
+        if len(fit_bounds_data) > 1:
+            bounds = fit_bounds_data.total_bounds
+            if np.all(np.isfinite(bounds)):
+                m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+        # Si hay exactamente un punto, simplemente centra el mapa en él
+        elif len(fit_bounds_data) == 1:
+            point = fit_bounds_data.iloc[0].geometry
+            m.location = [point.y, point.x]
+            m.zoom_start = 12 # Un nivel de zoom razonable para ver una sola estación
+   
         WmsTileLayer(url=layer_config["url"], layers=layer_config["layers"], fmt='image/png',
                      transparent=layer_config.get("transparent", False), overlay=True, control=True,
                      name=layer_config.get("attr", "Overlay")).add_to(m)
@@ -682,15 +691,14 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
                           xaxis_visible=False, yaxis_visible=False)
         return fig, None, f"Error: No hay suficientes datos para el año {year}"
 
-    # --- CORRECCIÓN DE ROBUSTEZ ---
-    # Limpieza estricta de datos antes de pasarlos al modelo
+    # --- INICIO DE LA CORRECCIÓN DE ROBUSTEZ ---
+    # Limpieza estricta de datos: elimina NaNs, infinitos y coordenadas duplicadas.
     df_clean = data_year_with_geom.dropna(subset=[Config.LONGITUDE_COL, Config.LATITUDE_COL, Config.PRECIPITATION_COL]).copy()
-    df_clean = df_clean[np.isfinite(df_clean[Config.LONGITUDE_COL])]
-    df_clean = df_clean[np.isfinite(df_clean[Config.LATITUDE_COL])]
-    df_clean = df_clean[np.isfinite(df_clean[Config.PRECIPITATION_COL])]
+    df_clean = df_clean[np.isfinite(df_clean[[Config.LONGITUDE_COL, Config.LATITUDE_COL, Config.PRECIPITATION_COL]]).all(axis=1)]
+    df_clean = df_clean.drop_duplicates(subset=[Config.LONGITUDE_COL, Config.LATITUDE_COL])
 
     if len(df_clean) < 4:
-         return go.Figure(), None, f"Error: No hay suficientes datos válidos para el año {year} después de la limpieza."
+         return go.Figure(), None, f"Error: No hay suficientes datos únicos y válidos para el año {year} después de la limpieza."
 
     lons = df_clean[Config.LONGITUDE_COL].values
     lats = df_clean[Config.LATITUDE_COL].values
@@ -804,14 +812,18 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                                                  station_to_show]
                 if not station_data_list.empty:
                     station_data = station_data_list.iloc[0]
+                    
+                    # Usamos la nueva lógica de create_folium_map pasándole el gdf de una sola fila
                     m = create_folium_map(
                         location=[station_data['geometry'].y, station_data['geometry'].x],
-                        zoom=10,
+                        zoom=12,
                         base_map_config=selected_base_map_config,
-                        overlays_config=selected_overlays_config
+                        overlays_config=selected_overlays_config,
+                        fit_bounds_data=station_data_list # <- Se pasa el GeoDataFrame para centrar
                     )
-                    
+                                        
                     popup_object = generate_station_popup_html(
+
                         station_data, 
                         df_anual_melted,
                         include_chart=True, 
