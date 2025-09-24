@@ -1113,7 +1113,7 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                     plt.close(fig_var2)
                 else:
                     st.info("El variograma no está disponible para este método o no hay suficientes datos.")
-
+                    
 def display_drought_analysis_tab(df_monthly_filtered, gdf_filtered, stations_for_analysis):
     st.header("Análisis de Extremos Hidrológicos")
     st.markdown("Esta sección permite identificar eventos extremos usando el **análisis de percentiles** o "
@@ -1354,7 +1354,7 @@ def display_stats_tab(df_long, df_anual_melted, df_monthly_filtered, stations_fo
                                                              vmax=100).format("{:.0f}%", na_rep="-").set_table_styles([
                                                                  {'selector': 'th', 'props': [('background-color', '#333'), ('color', 'white'), ('font-size', '14px')]},
                                                                  {'selector': 'td', 'props': [('text-align', 'center')]}])
-            st.dataframe(styled_df, use_container_width=True)
+            st.dataframe(styled_df)
         else:
             st.info("No hay datos para mostrar en la matriz con la selección actual.")
 
@@ -1409,7 +1409,7 @@ def display_stats_tab(df_long, df_anual_melted, df_monthly_filtered, stations_fo
                 st.info("No hay datos anuales válidos para mostrar la síntesis.")
         else:
             st.info("No hay datos para mostrar la síntesis general.")
-
+            
 def display_correlation_tab(df_monthly_filtered, stations_for_analysis):
     st.header("Análisis de Correlación")
     st.markdown("Esta sección cuantifica la relación lineal entre la precipitación y diferentes "
