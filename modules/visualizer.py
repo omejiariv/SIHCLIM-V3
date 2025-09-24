@@ -96,10 +96,7 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         
     return folium.Popup(full_html, max_width=450)
 
-    # Si no se pide gráfico, se retorna un popup estándar con el HTML del texto
-    return folium.Popup(html_content)
-
-# --- Funciones Auxiliares de Gráficos y Mapas ---
+    # --- Funciones Auxiliares de Gráficos y Mapas ---
 
 def create_enso_chart(enso_data):
     if enso_data.empty or Config.ENSO_ONI_COL not in enso_data.columns:
