@@ -684,10 +684,18 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
         return fig, None, f"Error: No hay suficientes datos para el año {year}"
 
     # --- INICIO DE LA CORRECCIÓN ---
-    # Forzar la conversión a tipo float para asegurar que no haya strings
-    lons = data_year_with_geom[Config.LONGITUDE_COL].values.astype(float)
-    lats = data_year_with_geom[Config.LATITUDE_COL].values.astype(float)
-    vals = data_year_with_geom[Config.PRECIPITATION_COL].values.astype(float)
+    # Limpieza robusta de datos antes de pasarlos al modelo
+    df_clean = data_year_with_geom.dropna(subset=[Config.LONGITUDE_COL, Config.LATITUDE_COL, Config.PRECIPITATION_COL]).copy()
+    df_clean = df_clean[np.isfinite(df_clean[Config.LONGITUDE_COL])]
+    df_clean = df_clean[np.isfinite(df_clean[Config.LATITUDE_COL])]
+    df_clean = df_clean[np.isfinite(df_clean[Config.PRECIPITATION_COL])]
+
+    if len(df_clean) < 4:
+         return go.Figure(), None, f"Error: No hay suficientes datos válidos para el año {year} después de la limpieza."
+
+    lons = df_clean[Config.LONGITUDE_COL].values
+    lats = df_clean[Config.LATITUDE_COL].values
+    vals = df_clean[Config.PRECIPITATION_COL].values
     # --- FIN DE LA CORRECCIÓN ---
 
     bounds = gdf_filtered_map.total_bounds
