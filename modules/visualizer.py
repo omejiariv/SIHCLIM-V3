@@ -193,24 +193,24 @@ def create_folium_map(location, zoom, base_map_config, overlays_config, fit_boun
     m = folium.Map(location=location, zoom_start=zoom, tiles=base_map_config.get("tiles",
                                                                                  "OpenStreetMap"), attr=base_map_config.get("attr", None))
 
+    # --- INICIO DE LA CORRECCIÓN ---
     if fit_bounds_data is not None and not fit_bounds_data.empty:
+        # Si hay más de un punto, ajusta los límites
         if len(fit_bounds_data) > 1:
             bounds = fit_bounds_data.total_bounds
             if np.all(np.isfinite(bounds)):
                 m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+        # Si hay exactamente un punto, simplemente centra el mapa en él
         elif len(fit_bounds_data) == 1:
             point = fit_bounds_data.iloc[0].geometry
             m.location = [point.y, point.x]
-            m.zoom_start = 12
-
-    # --- INICIO DE LA CORRECCIÓN ---
-    # La línea WmsTileLayer debe estar DENTRO del bucle for.
+            m.zoom_start = 12 # Un nivel de zoom razonable para ver una sola estación
+    # --- FIN DE LA CORRECCIÓN ---
+            
     for layer_config in overlays_config:
         WmsTileLayer(url=layer_config["url"], layers=layer_config["layers"], fmt='image/png',
                      transparent=layer_config.get("transparent", False), overlay=True, control=True,
                      name=layer_config.get("attr", "Overlay")).add_to(m)
-    # --- FIN DE LA CORRECCIÓN ---
-
     return m
 # --- Funciones de Pestañas Principales ---
 
@@ -819,12 +819,14 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                 if not station_data_list.empty:
                     station_data = station_data_list.iloc[0]
                     
+                    # --- CORRECCIÓN DE LLAMADA ---
+                    # Pasamos el GeoDataFrame de una sola fila a fit_bounds_data para que la nueva lógica lo maneje
                     m = create_folium_map(
                         location=[station_data['geometry'].y, station_data['geometry'].x],
                         zoom=12,
                         base_map_config=selected_base_map_config,
                         overlays_config=selected_overlays_config,
-                        fit_bounds_data=station_data_list
+                        fit_bounds_data=station_data_list 
                     )
                     
                     popup_object = generate_station_popup_html(
@@ -833,6 +835,7 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                         include_chart=True, 
                         df_monthly_filtered=df_monthly_filtered
                     )
+                    # Añadir marcador y abrir el popup por defecto para que sea más visible
                     folium.Marker(
                         location=[station_data['geometry'].y, station_data['geometry'].x],
                         popup=popup_object,
