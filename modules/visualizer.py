@@ -42,22 +42,19 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
                                 df_monthly_filtered=None):
     """
     Genera el contenido para el popup de una estación.
-    Si se incluye el gráfico, retorna un objeto folium.Popup con un IFrame.
-    Si no, retorna un objeto folium.Popup con HTML simple.
     """
     station_name = row[Config.STATION_NAME_COL]
-
-    # Intenta obtener el rango de años de la sesión, manejando modo normal y comparación
+    
+    # Lógica para obtener el rango de años
     year_range_val = st.session_state.get('year_range', (2000, 2020))
     if isinstance(year_range_val, tuple) and len(year_range_val) == 2 and isinstance(year_range_val[0], int):
         year_min, year_max = year_range_val
-    else: # Fallback para modo comparación o si el formato es inesperado
+    else:
         year_min, year_max = st.session_state.get('year_range_single', (2000, 2020))
-        
     total_years_in_period = year_max - year_min + 1
 
+    # Lógica para calcular estadísticas
     df_station_data = df_anual_melted[df_anual_melted[Config.STATION_NAME_COL] == station_name]
-
     if not df_station_data.empty:
         summary_data = df_station_data.groupby(Config.STATION_NAME_COL).agg(
             precip_media_anual=('precipitation', 'mean'),
@@ -69,7 +66,8 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
         valid_years = 0
         precip_media_anual = 0
 
-    html_content = f"""
+    # Genera el HTML del texto
+    text_html = f"""
     <h4>{station_name}</h4>
     <p><b>Municipio:</b> {row.get(Config.MUNICIPALITY_COL, 'N/A')}</p>
     <p><b>Altitud:</b> {row.get(Config.ALTITUDE_COL, 'N/A')} m</p>
@@ -77,32 +75,26 @@ def generate_station_popup_html(row, df_anual_melted, include_chart=False,
     <small>(Calculado con <b>{valid_years}</b> de <b>{total_years_in_period}</b> años del período)</small>
     """
 
-    # --- CORRECCIÓN DEL MINIGRÁFICO USANDO IFRAME ---
+    chart_html = ""
     if include_chart and df_monthly_filtered is not None:
         df_station_monthly_avg = df_monthly_filtered[df_monthly_filtered[Config.STATION_NAME_COL] == station_name]
-        
         if not df_station_monthly_avg.empty:
             df_monthly_avg = df_station_monthly_avg.groupby(Config.MONTH_COL)[Config.PRECIPITATION_COL].mean().reset_index()
-            
             if not df_monthly_avg.empty:
                 fig = go.Figure(data=[go.Bar(x=df_monthly_avg[Config.MONTH_COL], y=df_monthly_avg[Config.PRECIPITATION_COL])])
-                fig.update_layout(
-                    title_text="Ppt. Mensual Media",
-                    xaxis_title="Mes", yaxis_title="Ppt. (mm)", 
-                    height=250, width=350,
-                    margin=dict(t=40, b=20, l=20, r=20)
-                )
+                fig.update_layout(title_text="Ppt. Mensual Media", xaxis_title="Mes", yaxis_title="Ppt. (mm)", 
+                                  height=250, width=350, margin=dict(t=40, b=20, l=20, r=20))
                 chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-                
-                # Envolver el HTML del gráfico en un IFrame para un renderizado robusto en el popup
-                iframe = folium.IFrame(chart_html, width=370, height=270)
-                full_html_content = folium.Html(html_content + "<hr>", script=True)
-                
-                # Crear un popup que contenga tanto el texto como el iframe
-                popup = folium.Popup(max_width=400)
-                full_html_content.add_child(iframe)
-                popup.add_child(full_html_content)
-                return popup
+
+    # Combina el texto y el gráfico (si existe) en un solo bloque de HTML
+    if chart_html:
+        # Sanitizar las comillas dobles para que el IFrame funcione correctamente
+        sanitized_chart_html = chart_html.replace('"', '&quot;')
+        full_html = text_html + "<hr>" + f'<iframe srcdoc="{sanitized_chart_html}" width="370" height="270" frameborder="0"></iframe>'
+    else:
+        full_html = text_html
+        
+    return folium.Popup(full_html, max_width=450)
 
     # Si no se pide gráfico, se retorna un popup estándar con el HTML del texto
     return folium.Popup(html_content)
