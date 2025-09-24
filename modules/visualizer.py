@@ -694,9 +694,12 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
                           xaxis_visible=False, yaxis_visible=False)
         return fig, None, f"Error: No hay suficientes datos para el año {year}"
 
-    lons = data_year_with_geom[Config.LONGITUDE_COL].values
-    lats = data_year_with_geom[Config.LATITUDE_COL].values
-    vals = data_year_with_geom[Config.PRECIPITATION_COL].values
+    # --- INICIO DE LA CORRECCIÓN ---
+    # Forzar la conversión a tipo float para asegurar que no haya strings
+    lons = data_year_with_geom[Config.LONGITUDE_COL].values.astype(float)
+    lats = data_year_with_geom[Config.LATITUDE_COL].values.astype(float)
+    vals = data_year_with_geom[Config.PRECIPITATION_COL].values.astype(float)
+    # --- FIN DE LA CORRECCIÓN ---
 
     bounds = gdf_filtered_map.total_bounds
     grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
@@ -811,11 +814,18 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                         base_map_config=selected_base_map_config,
                         overlays_config=selected_overlays_config
                     )
-                    popup_object = generate_station_popup_html(station_data, df_anual_melted,
-                                                               include_chart=True, df_monthly_filtered=df_monthly_filtered)
-                    folium.Marker(location=[station_data['geometry'].y, station_data['geometry'].x],
-                                  popup=popup_object).add_to(m)
-                    folium.LayerControl().add_to(m)
+                    
+                    # Se llama a la función y el objeto popup se usa directamente
+                    popup_object = generate_station_popup_html(
+                        station_data, 
+                        df_anual_melted,
+                        include_chart=True, 
+                        df_monthly_filtered=df_monthly_filtered
+                    )
+                    folium.Marker(
+                        location=[station_data['geometry'].y, station_data['geometry'].x],
+                        popup=popup_object  # Se asigna el objeto directamente
+                    ).add_to(m)
                     folium_static(m, height=600, width="100%")
                 else:
                     st.warning(f"No se encontró información geográfica para la estación {station_to_show}.")
@@ -846,12 +856,17 @@ def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melt
                 df_year_filtered = df_anual_melted_non_na[df_anual_melted_non_na[Config.YEAR_COL]
                                                           == selected_year]
                 if not df_year_filtered.empty:
+                    
+                    cols_to_merge = [
+                        Config.STATION_NAME_COL, Config.LATITUDE_COL, Config.LONGITUDE_COL, 
+                        Config.MUNICIPALITY_COL, Config.ALTITUDE_COL, 'geometry'
+                    ]
                     df_map_data = pd.merge(
                         df_year_filtered,
-                        gdf_filtered[[Config.STATION_NAME_COL, Config.LATITUDE_COL,
-                                      Config.LONGITUDE_COL, 'geometry']].drop_duplicates(),
+                        gdf_filtered[cols_to_merge].drop_duplicates(),
                         on=Config.STATION_NAME_COL, how="inner"
                     )
+                   
                     if not df_map_data.empty:
                         min_val, max_val = df_anual_melted_non_na[Config.PRECIPITATION_COL].min(), \
                             df_anual_melted_non_na[Config.PRECIPITATION_COL].max()
