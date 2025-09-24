@@ -678,7 +678,7 @@ def display_graphs_tab(df_anual_melted, df_monthly_filtered, stations_for_analys
 def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map, df_anual_non_na):
     """
     Genera datos y gráficos para la interpolación espacial.
-    Incluye la corrección para mostrar el variograma y forzar tipos de datos numéricos.
+    Usa gstools para un Kriging y variograma robustos.
     """
     data_year_with_geom = pd.merge(
         df_anual_non_na[df_anual_non_na[Config.YEAR_COL] == year],
@@ -687,20 +687,15 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
         on=Config.STATION_NAME_COL
     )
 
-    if len(data_year_with_geom) < 4:
-        fig = go.Figure()
-        fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
-                          xaxis_visible=False, yaxis_visible=False)
-        return fig, None, f"Error: No hay suficientes datos para el año {year}"
-
-    # --- INICIO DE LA CORRECCIÓN DE ROBUSTEZ ---
-    # Limpieza estricta de datos: elimina NaNs, infinitos y coordenadas duplicadas.
     df_clean = data_year_with_geom.dropna(subset=[Config.LONGITUDE_COL, Config.LATITUDE_COL, Config.PRECIPITATION_COL]).copy()
     df_clean = df_clean[np.isfinite(df_clean[[Config.LONGITUDE_COL, Config.LATITUDE_COL, Config.PRECIPITATION_COL]]).all(axis=1)]
     df_clean = df_clean.drop_duplicates(subset=[Config.LONGITUDE_COL, Config.LATITUDE_COL])
 
     if len(df_clean) < 4:
-         return go.Figure(), None, f"Error: No hay suficientes datos únicos y válidos para el año {year} después de la limpieza."
+        fig = go.Figure()
+        fig.update_layout(title=f"Datos insuficientes para {method} en {year} (se necesitan >= 4)",
+                          xaxis_visible=False, yaxis_visible=False)
+        return fig, None, f"Error: No hay suficientes datos para el año {year}"
 
     lons = df_clean[Config.LONGITUDE_COL].values
     lats = df_clean[Config.LATITUDE_COL].values
@@ -709,35 +704,45 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
     bounds = gdf_filtered_map.total_bounds
     grid_lon = np.linspace(bounds[0] - 0.1, bounds[2] + 0.1, 100)
     grid_lat = np.linspace(bounds[1] - 0.1, bounds[3] + 0.1, 100)
-    z_grid = None
-    fig_variogram = None
-    error_message = None
+    z_grid, fig_variogram, error_message = None, None, None
 
     try:
         if method == "Kriging Ordinario":
-            ok = OrdinaryKriging(lons, lats, vals, variogram_model=variogram_model,
-                                 verbose=False, enable_plotting=False)
-            z_grid, _ = ok.execute('grid', grid_lon, grid_lat)
+            # --- INICIO DE LA LÓGICA CON GSTOOLS ---
+            # 1. Definir el modelo de covarianza (variograma)
+            if variogram_model == 'gaussian':
+                model = gs.Gaussian(dim=2)
+            elif variogram_model == 'exponential':
+                model = gs.Exponential(dim=2)
+            elif variogram_model == 'spherical':
+                model = gs.Spherical(dim=2)
+            else: # linear
+                model = gs.Linear(dim=2)
 
-            # --- CORRECCIÓN DEL VARIOGRAMA ---
-            # Se crea la figura de Matplotlib manualmente
+            # 2. Calcular y ajustar el variograma experimental
+            bin_center, gamma = gs.vario_estimate((lons, lats), vals)
+            model.fit_variogram(bin_center, gamma, nugget=True)
+            
+            # 3. Crear la figura del variograma con Matplotlib
             fig_variogram, ax = plt.subplots()
-            ax.plot(ok.lags, ok.semivariance, 'o', label='Semivariograma Experimental')
-            ax.plot(ok.lags,
-                    ok.variogram_model.variogram_function(ok.lags, *ok.variogram_model_parameters),
-                    '-', label='Modelo Teórico')
+            ax.plot(bin_center, gamma, 'o', label='Experimental')
+            model.plot(ax=ax, label='Modelo Ajustado')
             ax.set_xlabel('Distancia (grados)')
             ax.set_ylabel('Semivarianza')
-            ax.set_title(f'Variograma para {year} ({variogram_model})')
+            ax.set_title(f'Variograma para {year}')
             ax.legend()
+
+            # 4. Realizar el Kriging Ordinario
+            krig = gs.krige.Ordinary(model, (lons, lats), vals)
+            z_grid, _ = krig.structured([grid_lon, grid_lat])
+            # --- FIN DE LA LÓGICA CON GSTOOLS ---
 
         elif method == "IDW":
             z_grid = interpolate_idw(lons, lats, vals, grid_lon, grid_lat)
         elif method == "Spline (Thin Plate)":
             rbf = Rbf(lons, lats, vals, function='thin_plate')
             grid_x, grid_y = np.meshgrid(grid_lon, grid_lat)
-            z_grid_raw = rbf(grid_x, grid_y)
-            z_grid = z_grid_raw
+            z_grid = rbf(grid_x, grid_y)
 
     except Exception as e:
         error_message = f"Error al calcular {method} para el año {year}: {e}"
@@ -758,7 +763,6 @@ def generate_interpolation_data(year, method, variogram_model, gdf_filtered_map,
         return fig, fig_variogram, None
 
     return go.Figure().update_layout(title="Error: Método no implementado"), None, "Error: Método no implementado"
-
 
 def display_advanced_maps_tab(gdf_filtered, stations_for_analysis, df_anual_melted, df_monthly_filtered):
     st.header("Mapas Avanzados")
